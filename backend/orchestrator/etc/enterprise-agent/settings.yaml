@@ -1,0 +1,6 @@
+llm_api_key: ''
+llm_endpoint: /v1/chat/completions
+llm_model: ''
+llm_port: '11434'
+llm_server_path: http://localhost
+llm_timeout: '60'

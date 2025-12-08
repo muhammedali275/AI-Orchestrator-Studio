@@ -1,0 +1,56 @@
+{
+  "datasources": [
+    {
+      "name": "churn_analytics",
+      "type": "cubejs",
+      "url": "http://localhost:4000",
+      "auth_token": "your_cubejs_token",
+      "timeout_seconds": 30,
+      "enabled": true,
+      "config": {
+        "database": "analytics",
+        "schema": "public",
+        "description": "Customer churn analytics data"
+      }
+    },
+    {
+      "name": "customer_db",
+      "type": "postgres",
+      "url": "postgresql://user:pass@localhost:5432/customers",
+      "auth_token": null,
+      "timeout_seconds": 30,
+      "enabled": true,
+      "config": {
+        "pool_size": 10,
+        "max_overflow": 20,
+        "description": "Main customer database"
+      }
+    },
+    {
+      "name": "sales_api",
+      "type": "api",
+      "url": "https://api.sales.example.com",
+      "auth_token": "Bearer your_api_token",
+      "timeout_seconds": 60,
+      "enabled": true,
+      "config": {
+        "version": "v2",
+        "rate_limit": 100,
+        "description": "Sales data REST API"
+      }
+    },
+    {
+      "name": "mongodb_logs",
+      "type": "mongodb",
+      "url": "mongodb://localhost:27017",
+      "auth_token": null,
+      "timeout_seconds": 30,
+      "enabled": false,
+      "config": {
+        "database": "logs",
+        "collection": "application_logs",
+        "description": "Application logs database"
+      }
+    }
+  ]
+}

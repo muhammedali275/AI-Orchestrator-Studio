@@ -1,0 +1,40 @@
+{
+  "agents": [
+    {
+      "name": "zain_agent",
+      "url": "http://localhost:8001",
+      "auth_token": null,
+      "timeout_seconds": 30,
+      "enabled": true,
+      "metadata": {
+        "description": "Main Zain agent for customer service",
+        "version": "1.0.0",
+        "capabilities": ["chat", "analysis", "recommendations"]
+      }
+    },
+    {
+      "name": "analytics_agent",
+      "url": "http://localhost:8002",
+      "auth_token": "your_token_here",
+      "timeout_seconds": 60,
+      "enabled": true,
+      "metadata": {
+        "description": "Analytics and reporting agent",
+        "version": "1.0.0",
+        "capabilities": ["data_analysis", "reporting", "visualization"]
+      }
+    },
+    {
+      "name": "code_agent",
+      "url": "http://localhost:8003",
+      "auth_token": null,
+      "timeout_seconds": 120,
+      "enabled": false,
+      "metadata": {
+        "description": "Code generation and execution agent",
+        "version": "1.0.0",
+        "capabilities": ["code_generation", "code_execution", "debugging"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+├── app/
+  │   │   │   ├── __init__.py
+  │   │   │   ├── main.py                # FastAPI app startup (mounts /api, adds middleware)
+  │   │   │   ├── graph.py               # LangGraph: nodes + edges (flow)
+  │   │   │   ├── config.py              # Reads /etc/enterprise-agent/settings.yaml
+  │   │   │   ├── llm/                   # LLM abstraction (no model weights here)
+  │   │   │   │   ├── __init__.py
+  │   │   │   │   ├── client.py          # Calls vLLM/Ollama/OpenAI-compatible endpoint (H100 server)
+  │   │   │   │   └── registry.py        # Model names, routing/switching logic
+  │   │   │   ├── memory/                # Memory & caching (stateless nodes, shared backends)
+  │   │   │   │   ├── __init__.py
+  │   │   │   │   ├── conversation.py    # Per-user/session memory (Redis conv:*; optional SQL snapshot)
+  │   │   │   │   ├── cache.py           # Response/semantic/LLM cache helpers (Redis cache:*)
+  │   │   │   │   └── state_store.py     # Optional workflow state in Redis / KV
+  │   │   │   ├── db/                    # DB repositories (metadata, long-term memory)
+  │   │   │   │   ├── __init__.py
+  │   │   │   │   ├── metadata_repo.py   # SQL access to Metadata Catalog DB (domains, metrics, policies)
+  │   │   │   │   └── longterm_memory_repo.py  # Optional: writes full histories/summaries to MSSQL/MySQL/Oracle
+  │   │   │   ├── reasoning/             # “Brain”: intent, planning, safety
+  │   │   │   │   ├── __init__.py
+  │   │   │   │   ├── intent.py          # Intent classifier orchestration (which task type)
+  │   │   │   │   ├── planner.py         # Tool planning/orchestration (which tools in which order)
+  │   │   │   │   └── safety.py          # Guardrails + validations (DLP, policy checks, prompts)
+  │   │   │   ├── grounding/             # Connect answers to real, approved data
+  │   │   │   │   ├── __init__.py
+  │   │   │   │   ├── semantic.py        # Uses semantic_data_tool → Semantic Router with metadata result
+  │   │   │   │   ├── rag.py             # Uses RAG tool (vector DB / docs)
+  │   │   │   │   └── time_resolver.py   # Resolves “last quarter”, “YTD”, “previous month”, etc.
+  │   │   │   ├── tools/                 # Integration points to external systems
+  │   │   │   │   ├── __init__.py
+  │   │   │   │   ├── semantic_data.py   # HTTP client to Semantic Router /api/query (Cube.js, KPIs)
+  │   │   │   │   ├── metadata_catalog.py# NEW: calls db.metadata_repo to map NL → domain/metric/router
+  │   │   │   │   ├── rag_tool.py        # Client for Vector DB / RAG API (optional)
+  │   │   │   │   └── utils.py           # Common helper functions (datetime, math, parsing)
+  │   │   │   ├── chains/                # Prompts & LangChain/LangGraph helper chains
+  │   │   │   │   ├── __init__.py
+  │   │   │   │   ├── intent_chain.py    # Prompt for intent classification
+  │   │   │   │   ├── planner_chain.py   # Prompt for planning/tools selection
+  │   │   │   │   └── answer_chain.py    # Prompt for final answer synthesis (uses grounded data)
+  │   │   │   ├── api/                   # HTTP layer only (no business logic)
+  │   │   │   │   ├── __init__.py
+  │   │   │   │   ├── chat.py            # /api/v1/chat handler (builds AgentState, calls graph.run)
+  │   │   │   │   ├── health.py          # /api/v1/health (LB checks, dependency pings if needed)
+  │   │   │   │   └── admin.py           # /api/v1/admin (drain mode, version info, feature flags read-only)
+  │   │   │   ├── clients/               # External services (logging/audit/metrics/redis clients)
+  │   │   │   │   ├── __init__.py
+  │   │   │   │   ├── logging_client.py  # Sends logs to ai-logging-01 (OTEL/syslog/HTTP)
+  │   │   │   │   ├── audit_client.py    # Sends audit events to ai-audit-01
+  │   │   │   │   ├── metrics_client.py  # Exports metrics (Prometheus/OTEL exporter)
+  │   │   │   │   └── redis_client.py    # Central Redis connection for memory/cache/state
+  │   │   │   ├── middleware/
+  │   │   │   │   ├── __init__.py
+  │   │   │   │   ├── tracing.py         # Injects trace IDs, integrates with logging_client & metrics
+  │   │   │   │   └── request_context.py # Per-request context (user, tenant, roles, trace_id)
+  │   │   │   ├── schemas.py             # Pydantic models (AgentState, DTOs, tool request/response)
+  │   │   │   └── logging_setup.py       # Configures Python loggers to use logging_client / audit_client
+  │   │   └── tests/                     # Unit/integration tests for orchestrator (graph, tools, memory)
+  │   └── ...
+  └── venv/                              # Virtualenv for this service only (FastAPI, LangGraph, etc.)
+
+/etc/enterprise-agent/
+  ├── settings.yaml          # All URLs, timeouts, feature flags:
+  │                          # - LLM endpoint + model_id (e.g., llama4-scout via Ollama/vLLM)
+  │                          # - Redis: host/port/db for memory/cache
+  │                          # - Metadata DB DSN (MSSQL/MySQL/Oracle) for metadata_repo
+  │                          # - RAG/vector DB URLs (if enabled)
+  │                          # - Logging/audit/metrics endpoints
+  ├── logging.yaml           # Logging format, log levels, handlers
+  ├── models.yaml            # Registered models (e.g., ossgpt-70b, fast-8b, llama4-scout, routing rules)
+  └── secrets.env            # Env vars for DSNs/tokens; ideally replaced by Vault/K8s secrets later
+
+/var/log/enterprise-agent/
+  ├── app.log                # Minimal local log (for last-resort troubleshooting)
+  └── error.log              # Local error log; main logs go to ai-logging-01/ai-audit-01
+
+/var/cache/enterprise-agent/
+  ├── responses/             # Optional local fallback cache; canonical cache is Redis
+  └── semantic/              # Optional local semantic cache; use only as secondary layer if Redis down
+

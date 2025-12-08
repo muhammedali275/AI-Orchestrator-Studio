@@ -1,0 +1,71 @@
+{
+  "tools": [
+    {
+      "name": "web_search",
+      "type": "web_search",
+      "enabled": true,
+      "description": "Search the web for information using Google/Bing/DuckDuckGo",
+      "config": {
+        "api_key": "your_search_api_key",
+        "endpoint": "https://api.search.com/v1/search",
+        "provider": "google",
+        "max_results": 10,
+        "timeout": 30
+      }
+    },
+    {
+      "name": "http_api_caller",
+      "type": "http_request",
+      "enabled": true,
+      "description": "Make HTTP requests to external APIs",
+      "config": {
+        "base_url": "https://api.example.com",
+        "auth_token": "Bearer your_api_token",
+        "timeout": 30,
+        "headers": {
+          "User-Agent": "ZainOne-Orchestrator/1.0"
+        }
+      }
+    },
+    {
+      "name": "python_executor",
+      "type": "code_executor",
+      "enabled": true,
+      "description": "Execute Python code in a sandboxed environment",
+      "config": {
+        "timeout": 60,
+        "max_memory": "512MB",
+        "allowed_languages": ["python"],
+        "sandbox_enabled": true
+      }
+    },
+    {
+      "name": "slack_notifier",
+      "type": "http_request",
+      "enabled": false,
+      "description": "Send notifications to Slack",
+      "config": {
+        "base_url": "https://hooks.slack.com/services",
+        "auth_token": "your_slack_webhook_token",
+        "timeout": 10,
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    },
+    {
+      "name": "email_sender",
+      "type": "http_request",
+      "enabled": false,
+      "description": "Send emails via SendGrid API",
+      "config": {
+        "base_url": "https://api.sendgrid.com/v3",
+        "auth_token": "Bearer your_sendgrid_api_key",
+        "timeout": 30,
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    }
+  ]
+}

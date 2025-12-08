@@ -1,0 +1,6 @@
+{
+  "message": "Hello, how are you?",
+  "model_id": "llama3",
+  "routing_profile": "direct_llm",
+  "use_memory": false
+}

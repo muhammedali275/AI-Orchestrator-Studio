@@ -1,0 +1,14 @@
+{
+  "tools": [
+    {
+      "name": "test_http_tool",
+      "type": "http_request",
+      "config": {
+        "base_url": "https://api.example.com",
+        "timeout": "30"
+      },
+      "enabled": true,
+      "description": "Test HTTP tool"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "datasources": [
+    {
+      "name": "zaincunejsDS",
+      "type": "cubejs",
+      "url": "http://10.222.38.111:4000/cubejs-api/v1/load",
+      "auth_token": "",
+      "timeout_seconds": 30,
+      "enabled": true,
+      "config": {}
+    }
+  ]
+}

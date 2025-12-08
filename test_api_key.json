@@ -1,0 +1,5 @@
+{
+  "name": "Test App",
+  "permissions": ["read", "write"],
+  "expires_in_days": 365
+}

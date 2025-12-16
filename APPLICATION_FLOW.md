@@ -1,4 +1,4 @@
-# ZainOne Orchestrator Studio - Application Flow & Architecture
+# AI Orchestrator Studio - Application Flow & Architecture
 
 ## 1. HIGH-LEVEL ARCHITECTURE
 
@@ -47,10 +47,140 @@
     │         │   │          │        │          │   │          │
     │ Ollama/ │   │ Custom   │        │Database  │   │External  │
     │OpenAI   │   │Orchestr. │        │APIs      │   │Services  │
-    └─────────┘   └──────────┘        └──────────┘   └──────────┘
+      └─────────┘   └──────────┘        └──────────┘   └──────────┘
+```
+
+## 1.a FLOW DIAGRAM (Mermaid)
+
+```mermaid
+graph TD
+   %% UI Layer
+   U[User Prompt] -->|HTTP/REST| UI[Frontend: ChatStudio]
+   UI -->|POST /api/chat/ui/send (SSE)| BE[Backend: FastAPI]
+   UI -->|GET /api/chat/ui/models| BE
+   UI -->|GET /api/chat/ui/profiles| BE
+   UI -->|GET /api/chat/ui/conversations| BE
+
+   %% Orchestration Graph
+   BE --> IR[Intent Router]
+   IR -->|route| PL[Planner]
+   PL -->|plan| LA[LLM Agent]
+   LA -->|tool_call| TE[Tool Executor]
+   TE -->|fetch_data| GR[Grounding]
+   GR -->|context| LA
+   LA -->|store| MS[Memory Store]
+   MS -->|log| AU[Audit]
+   AU --> END[End]
+
+   %% Direct LLM path
+   IR -->|direct_llm| LA
+
+   %% External Agent path
+   LA --> EA[External Agent]
+   EA --> LA
+
+   %% Data Sources and Tools
+   TE -->|HTTP, Search, Code| DS[(Datasources)]
+   GR --> DS
+
+   %% Response back to UI
+   END -->|SendMessageResponse + metadata| UI
+```
+
+This diagram reflects the implemented topology and endpoints, including SSE streaming to the UI, routing profiles, planning, tool execution, grounding, memory updates, and auditing.
+
+---
+
+## 2.a End-to-End Flow (Prompt → Answer)
+
+- Normalize Input: Clean text, resolve dates/timezone, create normalized fingerprint for caching.
+- Rule-Based Router (no LLM): Decide Analytics vs Documents vs General Chat.
+- Decide Complexity: Simple vs Complex; choose Cache vs Execution vs Planner; saves ~200–300 ms per request.
+- Caching (before any LLM):
+   - Exact match → Redis.
+   - Semantic similarity → Qdrant/FAISS.
+   - Reuse plan or result when possible.
+- Analytics Path:
+   - Load semantic contract (metrics, dimensions, rules).
+   - Metric selection (rules + semantic similarity).
+   - Planner LLM only if complex; deterministic plan for simple queries.
+   - Query Validation Layer (hard gate): validate metric existence, dimensions, inject mandatory filters, block PII, enforce limits.
+   - Template-Based Query Build: no free SQL; no hallucinated joins; deterministic execution format.
+   - Result Cache: skip execution if cached.
+   - Execute Data Source: only governed APIs; capture latency & metadata.
+   - Result Validation (second gate): empty results, spikes, anomalies; retry once via fallback.
+   - Grounded Answer: LLM only writes explanation using returned data; includes evidence & freshness.
+   - Cache Writeback: plan cache, result cache, semantic similarity cache.
+   - Observability: full latency breakdown; cache hit/miss; planner usage; LLM tokens; SLA tracking.
+
+```mermaid
+flowchart TD
+   A[Prompt] --> N[Normalize Input\nClean text, resolve dates/timezone\nFingerprint]
+   N --> R[Rule-Based Router\n(no LLM)]
+   R -->|Analytics| AN
+   R -->|Documents| DOC
+   R -->|General Chat| GC
+
+   %% Caching before LLM
+   subgraph CACHING[Early Caching]
+      CM[Exact Cache\nRedis]
+      CS[Semantic Cache\nQdrant/FAISS]
+   end
+   N --> CACHING
+   CACHING --> R
+
+   %% Analytics path
+   AN --> DCC[Decide: Simple vs Complex\nCache vs Execution vs Planner]
+   DCC --> SC[Semantic Contract\nLoad metrics, dimensions, rules]
+   SC --> MS[Metric Selection\nRules + similarity]
+   MS --> PL{Complex?}
+   PL -->|No| DP[Deterministic Plan]
+   PL -->|Yes| PLLM[Planner LLM\n(JSON plan only)]
+   DP --> QV
+   PLLM --> QV[Query Validation (Hard Gate)\nValidate metrics & dims\nInject filters\nBlock PII\nEnforce limits]
+   QV --> TB[Template-Based Query Build\nNo free SQL\nNo hallucinated joins]
+   TB --> RC{Result Cached?}
+   RC -->|Yes| GRNA[Grounded Answer\nLLM writes explanation\nUses returned data only]
+   RC -->|No| EXE[Execute Data Source\nGoverned APIs]
+   EXE --> RV[Result Validation (Second Gate)\nEmpty/spikes/anomalies\nRetry once]
+   RV --> GRNA
+   GRNA --> WB[Cache Writeback\nPlan/result/semantic]
+
+   %% Observability
+   subgraph OBS[Observability]
+      LAT[Latency breakdown]
+      HIT[Cache hit/miss]
+      PUSE[Planner usage]
+      TOK[LLM tokens]
+      SLA[SLA tracking]
+   end
+   WB --> OBS
+
+   %% Documents & General Chat (grounded)
+   DOC --> DPROC[Retrieve + Ground]\n
+   GC --> GPROC[Guardrails + Ground]\n
+   DPROC --> GRNA
+   GPROC --> GRNA
 ```
 
 ---
+
+## 2.b Where Each Technology Lives (Clear Mapping)
+
+- LangGraph: Control plane (state machine). Used for routing, planner decision, validation gates, retry/fallback logic, end-to-end orchestration. LangGraph owns the flow, not the intelligence.
+- LangChain: Building blocks. Used for tool wrappers, vector retrievers, prompt templates, output parsers (JSON only). LangChain supplies components; it never decides the flow.
+- LLM (e.g., Llama 4 Scout on H100): Used only for complex planning (JSON plan) and grounded answer writing. Never used for routing, execution, validation, SQL/joins.
+
+---
+
+## 2.c Caching Layers
+
+| Cache Type | Technology       | Purpose                      |
+|------------|------------------|------------------------------|
+| Exact      | Redis            | Instant responses            |
+| Semantic   | Qdrant / FAISS   | Handle 20%+ similar queries  |
+| Result     | Redis            | Reduce backend load          |
+
 
 ## 2. REQUEST FLOW: USER MESSAGE → RESPONSE
 

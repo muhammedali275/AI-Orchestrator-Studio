@@ -45,6 +45,26 @@ class DataSourceConfig(BaseModel):
     config: Dict[str, Any] = Field(default_factory=dict, description="Additional configuration")
 
 
+class RouterConfig(BaseModel):
+    """Configuration for an intent router."""
+    name: str = Field(..., description="Router name/identifier")
+    type: str = Field(..., description="Router type (rule_based, llm_based, hybrid, keyword)")
+    enabled: bool = Field(default=True, description="Whether router is enabled")
+    priority: int = Field(default=0, description="Router priority (higher = evaluated first)")
+    rules: Dict[str, Any] = Field(default_factory=dict, description="Router-specific rules/patterns")
+    description: Optional[str] = Field(None, description="Router description")
+
+
+class PlannerConfig(BaseModel):
+    """Configuration for a task planner."""
+    name: str = Field(..., description="Planner name/identifier")
+    type: str = Field(..., description="Planner type (sequential, parallel, conditional, llm_based)")
+    enabled: bool = Field(default=True, description="Whether planner is enabled")
+    strategy: str = Field(default="sequential", description="Planning strategy")
+    templates: Dict[str, Any] = Field(default_factory=dict, description="Plan templates for different intents")
+    description: Optional[str] = Field(None, description="Planner description")
+
+
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables.
@@ -143,6 +163,20 @@ class Settings(BaseSettings):
         description="Dictionary of data source configurations"
     )
     datasources_config_path: Optional[str] = Field(default=None, description="Path to datasources configuration file")
+    
+    # Router Configuration
+    routers: Dict[str, RouterConfig] = Field(
+        default_factory=dict,
+        description="Dictionary of router configurations"
+    )
+    routers_config_path: Optional[str] = Field(default=None, description="Path to routers configuration file")
+    
+    # Planner Configuration
+    planners: Dict[str, PlannerConfig] = Field(
+        default_factory=dict,
+        description="Dictionary of planner configurations"
+    )
+    planners_config_path: Optional[str] = Field(default=None, description="Path to planners configuration file")
     
     # Grounding Configuration
     grounding_enabled: bool = Field(default=True, description="Enable grounding/RAG")
@@ -257,6 +291,50 @@ class Settings(BaseSettings):
         except Exception as e:
             logger.error(f"Error loading datasource configs from {filepath}: {str(e)}")
     
+    def load_routers_from_file(self, filepath: str) -> None:
+        """
+        Load router configurations from JSON file.
+        
+        Args:
+            filepath: Path to JSON file containing router configs
+        """
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+                routers_data = data.get('routers', [])
+                
+                for router_data in routers_data:
+                    router_config = RouterConfig(**router_data)
+                    self.routers[router_config.name] = router_config
+                
+                logger.info(f"Loaded {len(routers_data)} router configurations from {filepath}")
+        except FileNotFoundError:
+            logger.warning(f"Router config file not found: {filepath}")
+        except Exception as e:
+            logger.error(f"Error loading router configs from {filepath}: {str(e)}")
+    
+    def load_planners_from_file(self, filepath: str) -> None:
+        """
+        Load planner configurations from JSON file.
+        
+        Args:
+            filepath: Path to JSON file containing planner configs
+        """
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+                planners_data = data.get('planners', [])
+                
+                for planner_data in planners_data:
+                    planner_config = PlannerConfig(**planner_data)
+                    self.planners[planner_config.name] = planner_config
+                
+                logger.info(f"Loaded {len(planners_data)} planner configurations from {filepath}")
+        except FileNotFoundError:
+            logger.warning(f"Planner config file not found: {filepath}")
+        except Exception as e:
+            logger.error(f"Error loading planner configs from {filepath}: {str(e)}")
+    
     def get_agent(self, name: str) -> Optional[ExternalAgentConfig]:
         """Get agent configuration by name."""
         return self.external_agents.get(name)
@@ -268,6 +346,14 @@ class Settings(BaseSettings):
     def get_datasource(self, name: str) -> Optional[DataSourceConfig]:
         """Get datasource configuration by name."""
         return self.datasources.get(name)
+    
+    def get_router(self, name: str) -> Optional[RouterConfig]:
+        """Get router configuration by name."""
+        return self.routers.get(name)
+    
+    def get_planner(self, name: str) -> Optional[PlannerConfig]:
+        """Get planner configuration by name."""
+        return self.planners.get(name)
     
     def add_agent(self, agent: ExternalAgentConfig) -> None:
         """Add or update an agent configuration."""
@@ -283,6 +369,16 @@ class Settings(BaseSettings):
         """Add or update a datasource configuration."""
         self.datasources[datasource.name] = datasource
         self._persist_datasources()
+    
+    def add_router(self, router: RouterConfig) -> None:
+        """Add or update a router configuration."""
+        self.routers[router.name] = router
+        self._persist_routers()
+    
+    def add_planner(self, planner: PlannerConfig) -> None:
+        """Add or update a planner configuration."""
+        self.planners[planner.name] = planner
+        self._persist_planners()
     
     def remove_agent(self, name: str) -> bool:
         """Remove an agent configuration. Returns True if removed."""
@@ -305,6 +401,22 @@ class Settings(BaseSettings):
         if name in self.datasources:
             del self.datasources[name]
             self._persist_datasources()
+            return True
+        return False
+    
+    def remove_router(self, name: str) -> bool:
+        """Remove a router configuration. Returns True if removed."""
+        if name in self.routers:
+            del self.routers[name]
+            self._persist_routers()
+            return True
+        return False
+    
+    def remove_planner(self, name: str) -> bool:
+        """Remove a planner configuration. Returns True if removed."""
+        if name in self.planners:
+            del self.planners[name]
+            self._persist_planners()
             return True
         return False
     
@@ -360,6 +472,40 @@ class Settings(BaseSettings):
             logger.info(f"Persisted {len(agents_list)} agents to {agents_file.absolute()}")
         except Exception as e:
             logger.error(f"Error persisting agents: {str(e)}")
+    
+    def _persist_routers(self) -> None:
+        """Persist routers configuration to file."""
+        try:
+            from pathlib import Path
+            config_dir = Path("config")
+            config_dir.mkdir(parents=True, exist_ok=True)
+            
+            routers_file = config_dir / "routers.json"
+            routers_list = [router.dict() for router in self.routers.values()]
+            
+            with open(routers_file, 'w') as f:
+                json.dump({"routers": routers_list}, f, indent=2)
+            
+            logger.info(f"Persisted {len(routers_list)} routers to {routers_file.absolute()}")
+        except Exception as e:
+            logger.error(f"Error persisting routers: {str(e)}")
+    
+    def _persist_planners(self) -> None:
+        """Persist planners configuration to file."""
+        try:
+            from pathlib import Path
+            config_dir = Path("config")
+            config_dir.mkdir(parents=True, exist_ok=True)
+            
+            planners_file = config_dir / "planners.json"
+            planners_list = [planner.dict() for planner in self.planners.values()]
+            
+            with open(planners_file, 'w') as f:
+                json.dump({"planners": planners_list}, f, indent=2)
+            
+            logger.info(f"Persisted {len(planners_list)} planners to {planners_file.absolute()}")
+        except Exception as e:
+            logger.error(f"Error persisting planners: {str(e)}")
 
 
 @lru_cache()
@@ -390,6 +536,24 @@ def get_settings() -> Settings:
         default_datasources_file = Path("config/datasources.json")
         if default_datasources_file.exists():
             settings.load_datasources_from_file(str(default_datasources_file))
+    
+    # Load routers
+    if settings.routers_config_path:
+        settings.load_routers_from_file(settings.routers_config_path)
+    else:
+        from pathlib import Path
+        default_routers_file = Path("config/routers.json")
+        if default_routers_file.exists():
+            settings.load_routers_from_file(str(default_routers_file))
+    
+    # Load planners
+    if settings.planners_config_path:
+        settings.load_planners_from_file(settings.planners_config_path)
+    else:
+        from pathlib import Path
+        default_planners_file = Path("config/planners.json")
+        if default_planners_file.exists():
+            settings.load_planners_from_file(str(default_planners_file))
     
     # Backward compatibility: Create default agent from single-agent config
     if settings.external_agent_base_url and "default" not in settings.external_agents:

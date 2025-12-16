@@ -22,6 +22,7 @@ import SecurityIcon from '@mui/icons-material/Security';
 import HttpsIcon from '@mui/icons-material/Https';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import RouterIcon from '@mui/icons-material/Router';
 
 const drawerWidth = 280;
 
@@ -38,6 +39,7 @@ const menuItems: MenuItem[] = [
   { text: 'LLM Connections', path: '/llm', icon: <SettingsIcon /> },
   { text: 'Agents & System Prompts', path: '/agents', icon: <PsychologyIcon /> },
   { text: 'Tools & Data Sources', path: '/tools', icon: <BuildIcon /> },
+  { text: 'Routers & Planners', path: '/routers-planners', icon: <RouterIcon /> },
   { text: 'Orchestration Flow', path: '/topology', icon: <AccountTreeIcon /> },
   { text: 'Credentials & Security', path: '/credentials', icon: <SecurityIcon /> },
   { text: 'Certificates (HTTPS)', path: '/certificates', icon: <HttpsIcon /> },
@@ -362,10 +364,21 @@ const Sidebar: React.FC = () => {
             display: 'block',
             textAlign: 'center',
             color: 'text.secondary',
+            mb: 0.25,
+          }}
+        >
+          v{(process.env as any)?.REACT_APP_VERSION || 'dev'}
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{
+            display: 'block',
+            textAlign: 'center',
+            color: 'text.secondary',
             mb: 0.5,
           }}
         >
-          Version 1.0.0
+          © 2025 Muhammed Ali
         </Typography>
         <Box
           sx={{
@@ -387,6 +400,11 @@ const Sidebar: React.FC = () => {
           />
           <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 600 }}>
             System Online
+          </Typography>
+        </Box>
+        <Box sx={{ mt: 1, textAlign: 'center' }}>
+          <Typography variant="caption" color="text.secondary">
+            © 2025 Muhammed Ali
           </Typography>
         </Box>
       </Box>

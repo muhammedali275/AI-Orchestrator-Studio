@@ -13,9 +13,15 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from ..config import get_settings, Settings
+from .model_standardization import ModelParser, ModelValidator, ModelProvider
 from ..db.database import get_db
 from ..db.models import Conversation, Message, PromptProfile, ChatMetric
 from ..services.chat_router import ChatRouter
+from .error_handling import (
+    ErrorCode, ErrorResponse, create_error_response,
+    handle_conversation_not_found_error, handle_internal_server_error,
+    HTTPExceptionWithErrorCode
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +41,24 @@ class SendMessageRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
 
 
+class ResponseMetadata(BaseModel):
+    """Standardized response metadata."""
+    processing_time_ms: Optional[float] = None
+    tokens_used: Optional[int] = None
+    model_id: Optional[str] = None
+    routing_profile: Optional[str] = None
+    conversation_id: Optional[str] = None
+    message_id: Optional[str] = None
+    error_code: Optional[str] = None
+    suggestions: Optional[List[str]] = None
+
+
 class SendMessageResponse(BaseModel):
     """Response model for sending a message."""
     conversation_id: str
     message_id: str
     answer: str
-    metadata: Dict[str, Any]
+    metadata: ResponseMetadata
     error: Optional[str] = None
 
 
@@ -60,6 +78,41 @@ class PromptProfileCreate(BaseModel):
     is_active: bool = Field(default=True, description="Active status")
 
 
+# Routing profile validation constants
+VALID_ROUTING_PROFILES = {"direct_llm", "zain_agent", "tools_data"}
+ROUTING_PROFILE_INFO = {
+    "direct_llm": {
+        "id": "direct_llm",
+        "name": "Direct LLM",
+        "description": "Direct connection to LLM server without additional processing"
+    },
+    "zain_agent": {
+        "id": "zain_agent",
+        "name": "Zain Agent",
+        "description": "Route through Zain orchestrator agent with data access"
+    },
+    "tools_data": {
+        "id": "tools_data",
+        "name": "Tools + Data",
+        "description": "Full orchestration with tools, data sources, and reasoning"
+    }
+}
+
+
+def validate_routing_profile(profile_id: str) -> bool:
+    """Validate that routing profile exists."""
+    return profile_id in VALID_ROUTING_PROFILES
+
+
+def get_routing_profile_suggestions() -> List[str]:
+    """Get suggestions for routing profile validation errors."""
+    return [
+        f"Use one of: {', '.join(VALID_ROUTING_PROFILES)}",
+        "Default value 'direct_llm' is used if not specified",
+        "View available profiles with GET /api/chat/ui/profiles"
+    ]
+
+
 # Endpoints
 @router.post("/send", response_model=SendMessageResponse)
 async def send_message(
@@ -70,6 +123,8 @@ async def send_message(
     """
     Send a message and get response.
     
+    Validates routing profile before processing message.
+    
     Args:
         request: Message request
         settings: Application settings
@@ -79,6 +134,16 @@ async def send_message(
         Message response with answer
     """
     try:
+        # Validate routing profile
+        if not validate_routing_profile(request.routing_profile):
+            logger.warning(f"[Chat UI] Invalid routing profile: {request.routing_profile}")
+            raise HTTPExceptionWithErrorCode(
+                status_code=400,
+                detail=f"Invalid routing profile: {request.routing_profile}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                suggestions=get_routing_profile_suggestions()
+            )
+        
         # Get or create conversation
         if request.conversation_id:
             conversation = db.query(Conversation).filter(
@@ -86,7 +151,12 @@ async def send_message(
                 Conversation.is_deleted == False
             ).first()
             if not conversation:
-                raise HTTPException(status_code=404, detail="Conversation not found")
+                logger.error(f"[Chat UI] Conversation not found: {request.conversation_id}")
+                raise HTTPExceptionWithErrorCode(
+                    status_code=404,
+                    detail="Conversation not found",
+                    error_code=ErrorCode.CONVERSATION_NOT_FOUND
+                )
         else:
             # Create new conversation
             conversation = Conversation(
@@ -112,16 +182,30 @@ async def send_message(
         # Route message
         router_service = ChatRouter(settings)
         try:
+            import time
+            start_time = time.time()
+            
+            # Standardize model ID before routing
+            standardized_model_id = None
+            if request.model_id or conversation.model_id:
+                try:
+                    raw_model = request.model_id or conversation.model_id
+                    standardized_model_id = ModelParser.standardize(raw_model, use_full=True)
+                except Exception:
+                    standardized_model_id = request.model_id or conversation.model_id
+
             result = await router_service.route_message(
                 message=request.message,
                 conversation_id=conversation.id,
-                model_id=request.model_id or conversation.model_id,
+                model_id=standardized_model_id,
                 routing_profile=request.routing_profile,
                 use_memory=request.use_memory,
                 use_tools=request.use_tools,
                 user_id=conversation.user_id,
                 metadata=request.metadata
             )
+            
+            processing_time_ms = (time.time() - start_time) * 1000
             
             # Store assistant message
             assistant_message = Message(
@@ -137,17 +221,29 @@ async def send_message(
             db.commit()
             db.refresh(assistant_message)
             
+            # Build standardized response metadata
+            response_metadata = ResponseMetadata(
+                processing_time_ms=processing_time_ms,
+                tokens_used=result.get("tokens_used"),
+                model_id=standardized_model_id,
+                routing_profile=request.routing_profile,
+                conversation_id=conversation.id,
+                message_id=assistant_message.id
+            )
+            
             return SendMessageResponse(
                 conversation_id=conversation.id,
                 message_id=assistant_message.id,
                 answer=result.get("answer", ""),
-                metadata=result.get("metadata", {}),
+                metadata=response_metadata,
                 error=result.get("error")
             )
             
         finally:
             await router_service.close()
             
+    except HTTPExceptionWithErrorCode:
+        raise
     except Exception as e:
         logger.error(f"[Chat UI] Error sending message: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -162,6 +258,8 @@ async def send_message_stream(
     """
     Send a message and stream response.
     
+    Validates routing profile before streaming response.
+    
     Args:
         request: Message request
         settings: Application settings
@@ -171,6 +269,16 @@ async def send_message_stream(
         Streaming response
     """
     try:
+        # Validate routing profile
+        if not validate_routing_profile(request.routing_profile):
+            logger.warning(f"[Chat UI] Invalid routing profile in stream: {request.routing_profile}")
+            raise HTTPExceptionWithErrorCode(
+                status_code=400,
+                detail=f"Invalid routing profile: {request.routing_profile}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                suggestions=get_routing_profile_suggestions()
+            )
+        
         # Get or create conversation
         if request.conversation_id:
             conversation = db.query(Conversation).filter(
@@ -178,7 +286,12 @@ async def send_message_stream(
                 Conversation.is_deleted == False
             ).first()
             if not conversation:
-                raise HTTPException(status_code=404, detail="Conversation not found")
+                logger.error(f"[Chat UI] Conversation not found in stream: {request.conversation_id}")
+                raise HTTPExceptionWithErrorCode(
+                    status_code=404,
+                    detail="Conversation not found",
+                    error_code=ErrorCode.CONVERSATION_NOT_FOUND
+                )
         else:
             conversation = Conversation(
                 title=f"Chat {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
@@ -205,20 +318,37 @@ async def send_message_stream(
         
         async def generate():
             try:
+                # Standardize model ID before streaming
+                standardized_model_id = None
+                if request.model_id or conversation.model_id:
+                    try:
+                        raw_model = request.model_id or conversation.model_id
+                        standardized_model_id = ModelParser.standardize(raw_model, use_full=True)
+                    except Exception:
+                        standardized_model_id = request.model_id or conversation.model_id
+
+                # Stream tokens from router and emit SSE frames
                 async for chunk in router_service.stream_message(
                     message=request.message,
                     conversation_id=conversation.id,
-                    model_id=request.model_id or conversation.model_id,
+                    model_id=standardized_model_id,
                     routing_profile=request.routing_profile,
                     use_memory=request.use_memory,
                     user_id=conversation.user_id,
                     metadata=request.metadata
                 ):
-                    yield chunk
+                    # Normalize chunk to string
+                    token = chunk if isinstance(chunk, str) else chunk.get("token") or chunk.get("data") or ""
+                    if token:
+                        yield f"data: {token}\n\n"
+                
+                # Final event to signal completion
+                yield "event: done\n"
+                yield f"data: {{\"conversation_id\": \"{conversation.id}\", \"model_id\": \"{standardized_model_id}\"}}\n\n"
             finally:
                 await router_service.close()
         
-        return StreamingResponse(generate(), media_type="text/plain")
+        return StreamingResponse(generate(), media_type="text/event-stream")
         
     except Exception as e:
         logger.error(f"[Chat UI] Error streaming message: {str(e)}")
@@ -298,8 +428,10 @@ async def get_conversation(
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
         
+        # Filter messages to exclude soft-deleted ones
         messages = db.query(Message).filter(
-            Message.conversation_id == conversation_id
+            Message.conversation_id == conversation_id,
+            Message.is_deleted == False
         ).order_by(Message.created_at.asc()).all()
         
         return {
@@ -399,7 +531,7 @@ async def list_models(
         settings: Application settings
         
     Returns:
-        List of available models
+        List of available models with detailed status information
     """
     try:
         # Try to fetch models from LLM server
@@ -407,20 +539,16 @@ async def list_models(
         
         logger.info(f"[Chat UI] Fetching models from LLM server: {settings.llm_base_url}")
         
+        # Check if LLM is configured
         if not settings.llm_base_url:
-            logger.warning("[Chat UI] LLM base URL not configured, using default models")
-            # Fallback if LLM not configured
+            logger.warning("[Chat UI] LLM base URL not configured")
             return {
-                "success": True,
-                "models": [
-                    {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo"},
-                    {"id": "gpt-4", "name": "GPT-4"},
-                    {"id": "claude-3-opus", "name": "Claude 3 Opus"},
-                    {"id": "claude-3-sonnet", "name": "Claude 3 Sonnet"},
-                    {"id": "llama2-70b", "name": "Llama 2 70B"}
-                ],
-                "default_model": "gpt-3.5-turbo",
-                "message": "Using default models (LLM not configured)"
+                "success": False,
+                "models": [],
+                "default_model": None,
+                "error": "not_configured",
+                "message": "LLM server not configured. Please configure an LLM connection in Settings > LLM Configuration.",
+                "config_url": "/llm-config"
             }
         
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -444,27 +572,48 @@ async def list_models(
                         models = data.get("models", [])
                         if not models:
                             logger.warning("[Chat UI] No models found in Ollama response")
+                            return {
+                                "success": False,
+                                "models": [],
+                                "default_model": None,
+                                "error": "no_models",
+                                "message": "Ollama server is running but no models are installed. Please pull a model using 'ollama pull <model-name>'.",
+                                "server_url": settings.llm_base_url
+                            }
                         
-                        # Format for frontend - Ollama returns models with 'name' field
+                        # Standardize model identifiers
                         formatted_models = []
                         for m in models:
-                            model_name = m.get("name", m.get("model", "unknown"))
+                            raw_name = m.get("name", m.get("model", "unknown"))
+                            std = ModelParser.parse(f"{ModelProvider.OLLAMA.value}:{raw_name}")
                             formatted_models.append({
-                                "id": model_name,
-                                "name": model_name
+                                "id": std.full_id,
+                                "name": std.short_id,
+                                "provider": std.provider.value,
+                                "size": m.get("size", 0),
+                                "modified_at": m.get("modified_at", "")
                             })
                         
                         logger.info(f"[Chat UI] Formatted {len(formatted_models)} models from Ollama")
                         
-                        if formatted_models:
-                            return {
-                                "success": True,
-                                "models": formatted_models,
-                                "default_model": settings.llm_default_model or formatted_models[0]["id"],
-                                "source": "ollama"
-                            }
+                        return {
+                            "success": True,
+                            "models": formatted_models,
+                            "default_model": settings.llm_default_model or formatted_models[0]["id"],
+                            "source": "ollama",
+                            "server_url": settings.llm_base_url,
+                            "message": f"Successfully loaded {len(formatted_models)} model(s) from Ollama"
+                        }
                     else:
                         logger.error(f"[Chat UI] Ollama returned status {response.status_code}")
+                        return {
+                            "success": False,
+                            "models": [],
+                            "default_model": None,
+                            "error": "server_error",
+                            "message": f"Ollama server returned error (status {response.status_code}). Please check if Ollama is running.",
+                            "server_url": settings.llm_base_url
+                        }
                 else:
                     logger.info("[Chat UI] Using OpenAI-compatible endpoint")
                     # Try OpenAI-compatible endpoint
@@ -480,22 +629,111 @@ async def list_models(
                         
                         logger.info(f"[Chat UI] Found {len(models)} models from OpenAI-compatible endpoint")
                         
-                        if models:
+                        if not models:
                             return {
-                                "success": True,
-                                "models": models,
-                                "default_model": settings.llm_default_model or (models[0].get("id") if models else None),
-                                "source": "openai-compatible"
+                                "success": False,
+                                "models": [],
+                                "default_model": None,
+                                "error": "no_models",
+                                "message": "LLM server is running but no models are available.",
+                                "server_url": settings.llm_base_url
                             }
+                        
+                        # Standardize model identifiers from OpenAI-compatible response
+                        formatted_models = []
+                        for m in models:
+                            raw_id = m.get("id") or m.get("name") or "unknown"
+                            std = ModelParser.parse(f"{ModelProvider.OPENAI.value}:{raw_id}")
+                            formatted_models.append({
+                                "id": std.full_id,
+                                "name": std.short_id,
+                                "provider": std.provider.value,
+                                "created": m.get("created"),
+                                "object": m.get("object")
+                            })
+                        
+                        return {
+                            "success": True,
+                            "models": formatted_models,
+                            "default_model": settings.llm_default_model or (formatted_models[0].get("id") if formatted_models else None),
+                            "source": "openai-compatible",
+                            "server_url": settings.llm_base_url,
+                            "message": f"Successfully loaded {len(formatted_models)} model(s) from LLM server"
+                        }
                     else:
                         logger.error(f"[Chat UI] OpenAI endpoint returned status {response.status_code}")
+                        return {
+                            "success": False,
+                            "models": [],
+                            "default_model": None,
+                            "error": "server_error",
+                            "message": f"LLM server returned error (status {response.status_code}). Please check server configuration.",
+                            "server_url": settings.llm_base_url
+                        }
                         
             except httpx.ConnectError as e:
                 logger.error(f"[Chat UI] Connection error to LLM server: {str(e)}")
+                # Attempt local Ollama fallback for testing by default
+                try:
+                    local_url = "http://localhost:11434/api/tags"
+                    logger.info(f"[Chat UI] Trying local Ollama fallback at: {local_url}")
+                    local_resp = await client.get(local_url)
+                    if local_resp.status_code == 200:
+                        data = local_resp.json()
+                        models = data.get("models", [])
+                        formatted_models = []
+                        for m in models:
+                            raw_name = m.get("name", m.get("model", "unknown"))
+                            std = ModelParser.parse(f"{ModelProvider.OLLAMA.value}:{raw_name}")
+                            formatted_models.append({
+                                "id": std.full_id,
+                                "name": std.short_id,
+                                "provider": std.provider.value,
+                                "size": m.get("size", 0),
+                                "modified_at": m.get("modified_at", "")
+                            })
+                        if formatted_models:
+                            return {
+                                "success": True,
+                                "models": formatted_models,
+                                "default_model": formatted_models[0]["id"],
+                                "source": "ollama-local",
+                                "server_url": "http://localhost:11434",
+                                "message": f"Loaded {len(formatted_models)} model(s) from local Ollama fallback"
+                            }
+                except Exception as le:
+                    logger.warning(f"[Chat UI] Local Ollama fallback failed: {le}")
+                
+                return {
+                    "success": False,
+                    "models": [],
+                    "default_model": None,
+                    "error": "connection_error",
+                    "message": f"Cannot connect to LLM server at {settings.llm_base_url}. Please check if the server is running and the URL is correct.",
+                    "server_url": settings.llm_base_url,
+                    "config_url": "/llm-config"
+                }
             except httpx.TimeoutException as e:
                 logger.error(f"[Chat UI] Timeout connecting to LLM server: {str(e)}")
+                return {
+                    "success": False,
+                    "models": [],
+                    "default_model": None,
+                    "error": "timeout",
+                    "message": f"Connection to LLM server at {settings.llm_base_url} timed out. Please check if the server is responding.",
+                    "server_url": settings.llm_base_url,
+                    "config_url": "/llm-config"
+                }
             except Exception as e:
                 logger.error(f"[Chat UI] Error fetching models: {str(e)}", exc_info=True)
+                return {
+                    "success": False,
+                    "models": [],
+                    "default_model": None,
+                    "error": "fetch_error",
+                    "message": f"Error fetching models: {str(e)}",
+                    "server_url": settings.llm_base_url
+                }
         
         # Fallback to configured default model if available
         if settings.llm_default_model:
@@ -507,40 +745,29 @@ async def list_models(
                 ],
                 "default_model": settings.llm_default_model,
                 "message": "Using configured default model (could not fetch from server)",
-                "source": "config"
+                "source": "config",
+                "warning": "Could not fetch models from server, using configured default"
             }
         
-        # Final fallback to generic models
-        logger.warning("[Chat UI] Using fallback models")
+        # No models available
         return {
-            "success": True,
-            "models": [
-                {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo"},
-                {"id": "gpt-4", "name": "GPT-4"},
-                {"id": "claude-3-opus", "name": "Claude 3 Opus"},
-                {"id": "claude-3-sonnet", "name": "Claude 3 Sonnet"},
-                {"id": "llama2-70b", "name": "Llama 2 70B"}
-            ],
-            "default_model": "gpt-3.5-turbo",
-            "message": "Using fallback models (could not connect to LLM server)",
-            "source": "fallback"
+            "success": False,
+            "models": [],
+            "default_model": None,
+            "error": "no_models",
+            "message": "No models available. Please configure an LLM connection.",
+            "config_url": "/llm-config"
         }
         
     except Exception as e:
         logger.error(f"[Chat UI] Error listing models: {str(e)}", exc_info=True)
-        # Return fallback models
         return {
-            "success": True,
-            "models": [
-                {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo"},
-                {"id": "gpt-4", "name": "GPT-4"},
-                {"id": "claude-3-opus", "name": "Claude 3 Opus"},
-                {"id": "claude-3-sonnet", "name": "Claude 3 Sonnet"},
-                {"id": "llama2-70b", "name": "Llama 2 70B"}
-            ],
-            "default_model": "gpt-3.5-turbo",
-            "message": "Using fallback models due to error",
-            "source": "fallback"
+            "success": False,
+            "models": [],
+            "default_model": None,
+            "error": "unexpected_error",
+            "message": f"Unexpected error: {str(e)}",
+            "config_url": "/llm-config"
         }
 
 
@@ -549,29 +776,17 @@ async def list_routing_profiles() -> Dict[str, Any]:
     """
     List available routing profiles.
     
+    Returns information about all valid routing profiles that can be used for message routing.
+    
     Returns:
-        List of routing profiles
+        List of routing profiles with metadata
     """
-    profiles = [
-        {
-            "id": "direct_llm",
-            "name": "Direct LLM",
-            "description": "Direct connection to LLM server without additional processing"
-        },
-        {
-            "id": "zain_agent",
-            "name": "Zain Agent",
-            "description": "Route through Zain orchestrator agent with data access"
-        },
-        {
-            "id": "tools_data",
-            "name": "Tools + Data",
-            "description": "Full orchestration with tools, data sources, and reasoning"
-        }
-    ]
+    profiles = [ROUTING_PROFILE_INFO[profile_id] for profile_id in VALID_ROUTING_PROFILES]
     
     return {
-        "profiles": profiles
+        "profiles": profiles,
+        "default": "direct_llm",
+        "count": len(profiles)
     }
 
 

@@ -11,6 +11,7 @@ import DBManagement from './pages/DBManagement';
 import Upgrades from './pages/Upgrades';
 import MemoryCache from './pages/MemoryCache';
 import ToolsDataSources from './pages/ToolsDataSources';
+import RoutersPlannersConfig from './pages/RoutersPlannersConfig';
 import Topology from './pages/Topology';
 import MonitoringServices from './pages/MonitoringServices';
 import AdminPanel from './pages/AdminPanel';
@@ -364,6 +365,7 @@ function App() {
               <Route path="/llm" element={<LLMConnections />} />
               <Route path="/agents" element={<AgentsConfig />} />
               <Route path="/tools" element={<ToolsDataSources />} />
+              <Route path="/routers-planners" element={<RoutersPlannersConfig />} />
               <Route path="/topology" element={<Topology />} />
               <Route path="/credentials" element={<CredentialsSecurity />} />
               <Route path="/certificates" element={<Certificates />} />

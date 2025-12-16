@@ -1,0 +1,43 @@
+{
+  "routers": [
+    {
+      "name": "default_keyword_router",
+      "type": "keyword",
+      "enabled": true,
+      "priority": 10,
+      "rules": {
+        "keywords": {
+          "churn": "churn_analytics",
+          "customer retention": "churn_analytics",
+          "attrition": "churn_analytics",
+          "query": "data_query",
+          "database": "data_query",
+          "select": "data_query",
+          "search": "web_search",
+          "find": "web_search",
+          "google": "web_search",
+          "code": "code_generation",
+          "script": "code_generation",
+          "program": "code_generation",
+          "api": "tool_execution",
+          "http": "tool_execution",
+          "request": "tool_execution"
+        },
+        "case_sensitive": false
+      },
+      "description": "Default keyword-based intent router with high priority"
+    },
+    {
+      "name": "llm_fallback_router",
+      "type": "llm_based",
+      "enabled": true,
+      "priority": 0,
+      "rules": {
+        "model": "default",
+        "temperature": 0.3,
+        "prompt_template": "Classify the following user input into one of these intents: general_llm, churn_analytics, data_query, tool_execution, code_generation, web_search, external_agent, unknown"
+      },
+      "description": "LLM-based fallback router for ambiguous inputs"
+    }
+  ]
+}

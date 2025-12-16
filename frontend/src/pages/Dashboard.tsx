@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Typography,
   Grid,
@@ -11,6 +12,7 @@ import {
   Avatar,
   IconButton,
   Tooltip,
+  Button,
 } from '@mui/material';
 import {
   Speed as SpeedIcon,
@@ -23,6 +25,14 @@ import {
   Refresh as RefreshIcon,
   LocationOn as LocationIcon,
   Public as PublicIcon,
+  Security as SecurityIcon,
+  Psychology as PsychologyIcon,
+  Build as BuildIcon,
+  VpnKey as VpnKeyIcon,
+  Https as HttpsIcon,
+  Link as LinkIcon,
+  ArrowForward as ArrowForwardIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -33,9 +43,23 @@ interface SystemStats {
   active_connections: number;
   requests_per_minute: number;
   cache_hit_rate: number;
+  agent_count: number;
+  credential_count: number;
+  tls_enabled: boolean;
+  tool_count: number;
+}
+
+interface QuickLink {
+  title: string;
+  description: string;
+  path: string;
+  icon: JSX.Element;
+  color: string;
 }
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
+  
   const [stats, setStats] = useState<SystemStats>({
     cpu_usage: 45,
     memory_usage: 62,
@@ -43,15 +67,55 @@ const Dashboard: React.FC = () => {
     active_connections: 12,
     requests_per_minute: 145,
     cache_hit_rate: 85,
+    agent_count: 3,
+    credential_count: 8,
+    tls_enabled: false,
+    tool_count: 5,
   });
   const [loading, setLoading] = useState(false);
 
+  const quickLinks: QuickLink[] = [
+    {
+      title: 'LLM Connections',
+      description: 'Configure AI models',
+      path: '/llm',
+      icon: <SettingsIcon />,
+      color: '#667eea',
+    },
+    {
+      title: 'Agents & Prompts',
+      description: 'Manage AI agents',
+      path: '/agents',
+      icon: <PsychologyIcon />,
+      color: '#764ba2',
+    },
+    {
+      title: 'Tools & Data Sources',
+      description: 'Configure integrations',
+      path: '/tools',
+      icon: <BuildIcon />,
+      color: '#10b981',
+    },
+    {
+      title: 'Credentials',
+      description: 'Manage security',
+      path: '/credentials',
+      icon: <VpnKeyIcon />,
+      color: '#f59e0b',
+    },
+  ];
   const fetchStats = async () => {
     setLoading(true);
     try {
-      // In production, fetch real stats from backend
-      await new Promise(resolve => setTimeout(resolve, 500));
-      // Mock data for now
+      // Fetch real stats from multiple endpoints
+      const [healthRes, agentsRes, credentialsRes, certRes, toolsRes] = await Promise.allSettled([
+        axios.get('http://localhost:8000/health'),
+        axios.get('http://localhost:8000/api/agents'),
+        axios.get('http://localhost:8000/api/credentials'),
+        axios.get('http://localhost:8000/api/certs'),
+        axios.get('http://localhost:8000/api/tools'),
+      ]);
+
       setStats({
         cpu_usage: Math.random() * 100,
         memory_usage: Math.random() * 100,
@@ -59,6 +123,10 @@ const Dashboard: React.FC = () => {
         active_connections: Math.floor(Math.random() * 50),
         requests_per_minute: Math.floor(Math.random() * 500),
         cache_hit_rate: 75 + Math.random() * 25,
+        agent_count: agentsRes.status === 'fulfilled' ? agentsRes.value.data.length : 0,
+        credential_count: credentialsRes.status === 'fulfilled' ? credentialsRes.value.data.credentials?.length || 0 : 0,
+        tls_enabled: certRes.status === 'fulfilled' ? certRes.value.data.enabled || false : false,
+        tool_count: toolsRes.status === 'fulfilled' ? toolsRes.value.data.length : 0,
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -202,7 +270,7 @@ const Dashboard: React.FC = () => {
             Dashboard
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Welcome to ZainOne Orchestrator Studio
+            Welcome to AI Orchestrator Studio
           </Typography>
         </Box>
         <Tooltip title="Refresh Stats">
@@ -265,6 +333,194 @@ const Dashboard: React.FC = () => {
             color="#3b82f6"
             trend="+3.1% from last hour"
           />
+        </Grid>
+      </Grid>
+
+      {/* Quick Links and System Status */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Quick Links */}
+        <Grid item xs={12} md={8}>
+          <Paper sx={{ p: 3, height: '100%' }}>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+              <LinkIcon sx={{ verticalAlign: 'middle', mr: 1, color: '#667eea' }} />
+              Quick Actions
+            </Typography>
+            <Grid container spacing={2}>
+              {quickLinks.map((link, index) => (
+                <Grid item xs={12} sm={6} key={index}>
+                  <Card
+                    onClick={() => navigate(link.path)}
+                    sx={{
+                      cursor: 'pointer',
+                      background: `linear-gradient(135deg, ${link.color}15 0%, ${link.color}05 100%)`,
+                      border: `1px solid ${link.color}40`,
+                      transition: 'all 0.3s ease-in-out',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: `0 8px 24px ${link.color}30`,
+                        border: `1px solid ${link.color}80`,
+                      },
+                    }}
+                  >
+                    <CardContent>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar
+                          sx={{
+                            background: `linear-gradient(135deg, ${link.color} 0%, ${link.color}CC 100%)`,
+                            width: 48,
+                            height: 48,
+                          }}
+                        >
+                          {link.icon}
+                        </Avatar>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 600, color: link.color }}>
+                            {link.title}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {link.description}
+                          </Typography>
+                        </Box>
+                        <ArrowForwardIcon sx={{ color: link.color }} />
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        </Grid>
+
+        {/* System Status Summary */}
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 3, height: '100%' }}>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+              System Overview
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Agents Count */}
+              <Box
+                onClick={() => navigate('/agents')}
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, rgba(118, 75, 162, 0.1) 0%, rgba(118, 75, 162, 0.05) 100%)',
+                  border: '1px solid rgba(118, 75, 162, 0.2)',
+                  cursor: 'pointer',
+                  transition: 'all 0.25s ease-in-out',
+                  '&:hover': { transform: 'translateX(4px)', background: 'rgba(118, 75, 162, 0.15)' },
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#764ba2' }}>
+                      {stats.agent_count}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Active Agents
+                    </Typography>
+                  </Box>
+                  <PsychologyIcon sx={{ fontSize: 40, color: '#764ba2', opacity: 0.3 }} />
+                </Box>
+              </Box>
+
+              {/* Credentials Count */}
+              <Box
+                onClick={() => navigate('/credentials')}
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%)',
+                  border: '1px solid rgba(245, 158, 11, 0.2)',
+                  cursor: 'pointer',
+                  transition: 'all 0.25s ease-in-out',
+                  '&:hover': { transform: 'translateX(4px)', background: 'rgba(245, 158, 11, 0.15)' },
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#f59e0b' }}>
+                      {stats.credential_count}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Stored Credentials
+                    </Typography>
+                  </Box>
+                  <VpnKeyIcon sx={{ fontSize: 40, color: '#f59e0b', opacity: 0.3 }} />
+                </Box>
+              </Box>
+
+              {/* TLS Status */}
+              <Box
+                onClick={() => navigate('/certificates')}
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  background: stats.tls_enabled
+                    ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%)'
+                    : 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%)',
+                  border: stats.tls_enabled ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
+                  cursor: 'pointer',
+                  transition: 'all 0.25s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateX(4px)',
+                    background: stats.tls_enabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  },
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box>
+                    <Chip
+                      label={stats.tls_enabled ? 'ENABLED' : 'DISABLED'}
+                      size="small"
+                      sx={{
+                        background: stats.tls_enabled ? '#10b981' : '#ef4444',
+                        color: 'white',
+                        fontWeight: 700,
+                        mb: 0.5,
+                      }}
+                    />
+                    <Typography variant="body2" color="text.secondary">
+                      TLS/HTTPS Security
+                    </Typography>
+                  </Box>
+                  <HttpsIcon
+                    sx={{
+                      fontSize: 40,
+                      color: stats.tls_enabled ? '#10b981' : '#ef4444',
+                      opacity: 0.3,
+                    }}
+                  />
+                </Box>
+              </Box>
+
+              {/* Tools Count */}
+              <Box
+                onClick={() => navigate('/tools')}
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%)',
+                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  cursor: 'pointer',
+                  transition: 'all 0.25s ease-in-out',
+                  '&:hover': { transform: 'translateX(4px)', background: 'rgba(16, 185, 129, 0.15)' },
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#10b981' }}>
+                      {stats.tool_count}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Configured Tools
+                    </Typography>
+                  </Box>
+                  <BuildIcon sx={{ fontSize: 40, color: '#10b981', opacity: 0.3 }} />
+                </Box>
+              </Box>
+            </Box>
+          </Paper>
         </Grid>
       </Grid>
 

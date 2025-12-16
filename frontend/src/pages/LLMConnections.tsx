@@ -83,27 +83,32 @@ const LLMConnections: React.FC = () => {
   const fetchConnections = async () => {
     setLoading(true);
     try {
-      // For now, we'll use mock data since the API might return a single config
-      // In production, this would call GET /api/config/llm-connections
-      const response = await axios.get('http://localhost:8000/api/llm/config');
+      const response = await axios.get('http://localhost:8000/api/llm/config', { timeout: 5000 });
       
       // Convert single config to array format
       const singleConfig = response.data;
-      setConnections([
-        {
-          id: 'default',
-          name: 'Default LLM',
-          base_url: singleConfig.base_url || '',
-          api_key: singleConfig.api_key || '',
-          model: singleConfig.default_model || '',
-          timeout: singleConfig.timeout_seconds || 60,
-          max_tokens: singleConfig.max_tokens || 2048,
-          temperature: singleConfig.temperature || 0.7,
-        },
-      ]);
-    } catch (error) {
+      const connection = {
+        id: 'default',
+        name: 'Default LLM',
+        base_url: singleConfig.base_url || '',
+        api_key: singleConfig.api_key || '',
+        model: singleConfig.default_model || '',
+        timeout: singleConfig.timeout_seconds || 60,
+        max_tokens: singleConfig.max_tokens || 2048,
+        temperature: singleConfig.temperature || 0.7,
+        is_local: (singleConfig.base_url || '').includes('localhost') || (singleConfig.base_url || '').includes('11434'),
+      };
+      
+      setConnections([connection]);
+    } catch (error: any) {
       console.error('Error fetching LLM connections:', error);
-      setMessage('Error loading LLM connections');
+      // Show empty state if backend is not configured
+      setConnections([]);
+      if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
+        setMessage('Backend server not responding. Please ensure the backend is running.');
+      } else {
+        setMessage('No LLM configuration found. Click "Add Connection" to configure.');
+      }
     } finally {
       setLoading(false);
     }
@@ -138,28 +143,70 @@ const LLMConnections: React.FC = () => {
   };
 
   const handleSaveConnection = async () => {
-    try {
-      if (editingConnection) {
-        // Update existing connection
-        await axios.put(`http://localhost:8000/api/llm/config`, {
-          base_url: formData.base_url,
-          default_model: formData.model,
-          api_key: formData.api_key,
-          timeout_seconds: formData.timeout,
-          max_tokens: formData.max_tokens,
-          temperature: formData.temperature,
-        });
-        setMessage('LLM connection updated successfully!');
-      } else {
-        // Create new connection
-        await axios.post(`http://localhost:8000/api/llm/config`, formData);
-        setMessage('LLM connection created successfully!');
+    // Validate required fields
+    if (!formData.name.trim()) {
+      setMessage('Connection name is required');
+      return;
+    }
+    if (!formData.base_url.trim()) {
+      setMessage('Base URL is required');
+      return;
+    }
+    if (!formData.model.trim()) {
+      setMessage('Model name is required');
+      return;
+    }
+
+    // Normalize base URL: strip trailing slashes and paths (e.g., remove /api/chat)
+    const normalizeBaseUrl = (url: string) => {
+      let trimmed = url.trim();
+      try {
+        const parsed = new URL(trimmed);
+        return `${parsed.protocol}//${parsed.host}`;
+      } catch (e) {
+        // Fallback: strip trailing slash and anything after first '/'
+        trimmed = trimmed.replace(/\/$/, '');
+        const idx = trimmed.indexOf('/', trimmed.indexOf('//') + 2);
+        return idx > -1 ? trimmed.slice(0, idx) : trimmed;
       }
-      fetchConnections();
-      handleCloseDialog();
-      setTimeout(() => setMessage(''), 3000);
+    };
+
+    const normalizedBase = normalizeBaseUrl(formData.base_url);
+    if (normalizedBase !== formData.base_url.trim()) {
+      setMessage(`Base URL normalized to ${normalizedBase} (paths like /api/chat were removed).`);
+    }
+
+    setLoading(true);
+    try {
+      // Always use PUT to update the single LLM configuration
+      const response = await axios.put(`http://localhost:8000/api/llm/config`, {
+        base_url: normalizedBase,
+        default_model: formData.model,
+        api_key: formData.api_key || undefined,
+        timeout_seconds: formData.timeout,
+        max_tokens: formData.max_tokens,
+        temperature: formData.temperature,
+      }, { timeout: 10000 });
+
+      if (response.data.success) {
+        setMessage('LLM connection saved successfully! ✓');
+        await fetchConnections();
+        handleCloseDialog();
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('Configuration saved but may need verification');
+        await fetchConnections();
+        handleCloseDialog();
+      }
     } catch (error: any) {
-      setMessage(`Error: ${error.response?.data?.detail || error.message}`);
+      console.error('Error saving connection:', error);
+      if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
+        setMessage('Cannot connect to backend. Please ensure the backend server is running on port 8000.');
+      } else {
+        setMessage(`Error: ${error.response?.data?.detail || error.message}`);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -434,7 +481,7 @@ const LLMConnections: React.FC = () => {
                   setFormData({ ...formData, base_url: url, is_local: isLocal });
                 }}
                 placeholder="http://localhost:11434"
-                helperText="Full URL including protocol and port"
+                helperText="Server URL only (e.g., http://10.99.70.200:11434) - do NOT include /api/chat or other paths"
               />
             </Grid>
             {formData.is_local ? (

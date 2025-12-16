@@ -4,7 +4,7 @@ echo ZainOne Orchestrator Studio
 echo ========================================
 echo.
 echo Starting Backend Server...
-start "Backend Server" cmd /k "cd backend && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+start "Backend Server" cmd /k "cd backend\orchestrator && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 echo.
 echo Waiting 3 seconds for backend to initialize...
 timeout /t 3 /nobreak >nul

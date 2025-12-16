@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Typography, Paper, Box, Chip, Card, CardContent, IconButton, Tooltip, 
   Button, LinearProgress, Alert, CircularProgress, Dialog, DialogTitle, 
-  DialogContent, DialogActions, List, ListItem, ListItemText, Divider 
+  DialogContent, DialogActions, List, ListItem, ListItemText, Divider,
+  Drawer, TextField, Switch, FormControlLabel, Grid,
 } from '@mui/material';
 import {
   PlayArrow as StartIcon,
@@ -19,6 +20,9 @@ import {
   Assessment,
   Storage as StorageIcon,
   Psychology,
+  Close as CloseIcon,
+  Save as SaveIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -51,6 +55,13 @@ interface ExecutionStatus {
   }>;
 }
 
+interface NodeConfig {
+  enabled: boolean;
+  timeout?: number;
+  retry_count?: number;
+  [key: string]: any;
+}
+
 const Topology: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [nodes, setNodes] = useState<GraphNode[]>([]);
@@ -60,6 +71,13 @@ const Topology: React.FC = () => {
   const [showLogs, setShowLogs] = useState(false);
   const [testingComponent, setTestingComponent] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<any>(null);
+  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [nodeConfig, setNodeConfig] = useState<NodeConfig>({
+    enabled: true,
+    timeout: 30,
+    retry_count: 3,
+  });
+  const [showConfigPanel, setShowConfigPanel] = useState(false);
 
   const getNodeIcon = (type: string) => {
     switch (type) {
@@ -128,14 +146,57 @@ const Topology: React.FC = () => {
   const fetchGraph = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:8000/api/topology/graph');
-      setNodes(response.data.nodes || []);
-      setEdges(response.data.edges || []);
+      const response = await axios.get('http://localhost:8000/api/topology/graph', { timeout: 5000 });
+      const graphData = response.data;
+      
+      if (graphData.nodes && graphData.nodes.length > 0) {
+        setNodes(graphData.nodes);
+        setEdges(graphData.edges || []);
+      } else {
+        // Use fallback data if no nodes returned
+        loadFallbackGraph();
+      }
     } catch (error) {
       console.error('Error fetching graph:', error);
+      // Load fallback graph on error
+      loadFallbackGraph();
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadFallbackGraph = () => {
+    // Default 11-node topology
+    const fallbackNodes: GraphNode[] = [
+      { id: 'start', type: 'start', label: 'Start', description: 'Entry point', status: 'idle', config: {} },
+      { id: 'router', type: 'router', label: 'Intent Router', description: 'Route based on intent', status: 'idle', config: { confidence_threshold: 0.7 } },
+      { id: 'planner', type: 'planner', label: 'Task Planner', description: 'Break down complex tasks', status: 'idle', config: {} },
+      { id: 'llm_agent', type: 'llm_agent', label: 'LLM Agent', description: 'Primary LLM reasoning', status: 'idle', config: { temperature: 0.7, max_tokens: 2000 } },
+      { id: 'external_agent', type: 'external_agent', label: 'External Agent', description: 'Specialized agent', status: 'idle', config: {} },
+      { id: 'tool_executor', type: 'tool_executor', label: 'Tool Executor', description: 'Execute tools', status: 'idle', config: { max_parallel: 3 } },
+      { id: 'grounding', type: 'grounding', label: 'Data Grounding', description: 'Ground with data sources', status: 'idle', config: {} },
+      { id: 'memory_store', type: 'memory_store', label: 'Memory Store', description: 'Store conversation context', status: 'idle', config: { max_items: 50 } },
+      { id: 'audit', type: 'audit', label: 'Audit Logger', description: 'Log all interactions', status: 'idle', config: {} },
+      { id: 'error_handler', type: 'error_handler', label: 'Error Handler', description: 'Handle errors gracefully', status: 'idle', config: {} },
+      { id: 'end', type: 'end', label: 'End', description: 'Final response', status: 'idle', config: {} },
+    ];
+    
+    const fallbackEdges: GraphEdge[] = [
+      { source: 'start', target: 'router', label: 'Initial' },
+      { source: 'router', target: 'planner', label: 'Complex Task' },
+      { source: 'router', target: 'llm_agent', label: 'Simple Query' },
+      { source: 'planner', target: 'llm_agent', label: 'Planned Steps' },
+      { source: 'llm_agent', target: 'tool_executor', label: 'Need Tools' },
+      { source: 'llm_agent', target: 'external_agent', label: 'Need Specialist' },
+      { source: 'tool_executor', target: 'grounding', label: 'Get Data' },
+      { source: 'external_agent', target: 'grounding', label: 'Verify' },
+      { source: 'grounding', target: 'memory_store', label: 'Store Context' },
+      { source: 'memory_store', target: 'audit', label: 'Log' },
+      { source: 'audit', target: 'end', label: 'Complete' },
+    ];
+    
+    setNodes(fallbackNodes);
+    setEdges(fallbackEdges);
   };
 
   const startExecution = async () => {
@@ -197,13 +258,38 @@ const Topology: React.FC = () => {
     try {
       const response = await axios.post('http://localhost:8000/api/topology/test-component', {
         component_id: componentId,
-        test_data: {},
       });
-      setTestResults(response.data);
-    } catch (error) {
-      setTestResults({ success: false, error: 'Test failed' });
+      setTestResults({ success: true, output: response.data });
+    } catch (error: any) {
+      setTestResults({ success: false, error: error.message || 'Test failed' });
     } finally {
       setTestingComponent(null);
+    }
+  };
+
+  const handleNodeClick = (node: GraphNode) => {
+    setSelectedNode(node);
+    setShowConfigPanel(true);
+    setNodeConfig({
+      enabled: node.config?.enabled ?? true,
+      timeout: node.config?.timeout ?? 30,
+      retry_count: node.config?.retry_count ?? 3,
+      ...node.config,
+    });
+  };
+
+  const saveNodeConfig = async () => {
+    if (!selectedNode) return;
+    try {
+      await axios.put(`http://localhost:8000/api/topology/nodes/${selectedNode.id}/config`, nodeConfig);
+      // Update local state
+      const updatedNodes = nodes.map(n => 
+        n.id === selectedNode.id ? { ...n, config: nodeConfig } : n
+      );
+      setNodes(updatedNodes);
+      setShowConfigPanel(false);
+    } catch (error) {
+      console.error('Error saving node config:', error);
     }
   };
 
@@ -358,12 +444,19 @@ const Topology: React.FC = () => {
               {/* Node Card */}
               <Card
                 className="card-hover"
+                onClick={() => handleNodeClick(node)}
                 sx={{
                   width: '100%',
                   maxWidth: 600,
                   background: `linear-gradient(135deg, ${getNodeColor(node.type)}15 0%, ${getNodeColor(node.type)}25 100%)`,
                   border: `2px solid ${getNodeColor(node.type)}`,
                   boxShadow: `0 0 20px ${getNodeColor(node.type)}40`,
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateY(-4px)',
+                    boxShadow: `0 8px 32px ${getNodeColor(node.type)}60`,
+                  },
                 }}
               >
                 <CardContent>
@@ -395,6 +488,18 @@ const Topology: React.FC = () => {
                           disabled={testingComponent === node.id}
                           sx={{ background: 'rgba(102, 126, 234, 0.1)' }}>
                           {testingComponent === node.id ? <CircularProgress size={16} /> : <TestIcon fontSize="small" />}
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Configure Node">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNodeClick(node);
+                          }}
+                          sx={{ background: 'rgba(102, 126, 234, 0.1)' }}
+                        >
+                          <SettingsIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </Box>
@@ -524,15 +629,29 @@ const Topology: React.FC = () => {
               <Alert severity={testResults.success ? 'success' : 'error'} sx={{ mb: 2 }}>
                 {testResults.success ? 'Component is healthy' : 'Component test failed'}
               </Alert>
-              <Typography variant="body2" gutterBottom>
-                <strong>Component:</strong> {testResults.component_id}
-              </Typography>
-              <Typography variant="body2" gutterBottom>
-                <strong>Status:</strong> {testResults.status}
-              </Typography>
-              <Typography variant="body2" gutterBottom>
-                <strong>Message:</strong> {testResults.message || testResults.error}
-              </Typography>
+              {testResults.error && (
+                <Typography variant="body2" color="error">
+                  Error: {testResults.error}
+                </Typography>
+              )}
+              {testResults.output && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Output:</Typography>
+                  <Box
+                    component="pre"
+                    sx={{
+                      p: 2,
+                      background: 'rgba(0, 0, 0, 0.05)',
+                      borderRadius: 1,
+                      overflow: 'auto',
+                      fontSize: '0.8rem',
+                      mt: 1,
+                    }}
+                  >
+                    {JSON.stringify(testResults.output, null, 2)}
+                  </Box>
+                </Box>
+              )}
             </Box>
           )}
         </DialogContent>
@@ -540,6 +659,210 @@ const Topology: React.FC = () => {
           <Button onClick={() => setTestResults(null)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Node Configuration Drawer */}
+      <Drawer
+        anchor="right"
+        open={showConfigPanel}
+        onClose={() => setShowConfigPanel(false)}
+        PaperProps={{
+          sx: {
+            width: 400,
+            p: 3,
+          },
+        }}
+      >
+        {selectedNode && (
+          <Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                Configure Node
+              </Typography>
+              <IconButton onClick={() => setShowConfigPanel(false)}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+
+            <Divider sx={{ mb: 3 }} />
+
+            {/* Node Info */}
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                {getNodeIcon(selectedNode.type)}
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: getNodeColor(selectedNode.type) }}>
+                    {selectedNode.label}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {selectedNode.type}
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                {selectedNode.description}
+              </Typography>
+            </Box>
+
+            <Divider sx={{ mb: 3 }} />
+
+            {/* Configuration Form */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={nodeConfig.enabled}
+                    onChange={(e) => setNodeConfig({ ...nodeConfig, enabled: e.target.checked })}
+                  />
+                }
+                label="Node Enabled"
+              />
+
+              <TextField
+                label="Timeout (seconds)"
+                type="number"
+                value={nodeConfig.timeout}
+                onChange={(e) => setNodeConfig({ ...nodeConfig, timeout: parseInt(e.target.value) || 30 })}
+                fullWidth
+              />
+
+              <TextField
+                label="Retry Count"
+                type="number"
+                value={nodeConfig.retry_count}
+                onChange={(e) => setNodeConfig({ ...nodeConfig, retry_count: parseInt(e.target.value) || 3 })}
+                fullWidth
+              />
+
+              {/* Node-specific configuration */}
+              {selectedNode.type === 'llm_agent' && (
+                <>
+                  <TextField
+                    label="Model"
+                    value={nodeConfig.model || ''}
+                    onChange={(e) => setNodeConfig({ ...nodeConfig, model: e.target.value })}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Temperature"
+                    type="number"
+                    inputProps={{ step: 0.1, min: 0, max: 2 }}
+                    value={nodeConfig.temperature || 0.7}
+                    onChange={(e) => setNodeConfig({ ...nodeConfig, temperature: parseFloat(e.target.value) || 0.7 })}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Max Tokens"
+                    type="number"
+                    value={nodeConfig.max_tokens || 1000}
+                    onChange={(e) => setNodeConfig({ ...nodeConfig, max_tokens: parseInt(e.target.value) || 1000 })}
+                    fullWidth
+                  />
+                </>
+              )}
+
+              {selectedNode.type === 'tool_executor' && (
+                <>
+                  <TextField
+                    label="Max Parallel Tools"
+                    type="number"
+                    value={nodeConfig.max_parallel || 3}
+                    onChange={(e) => setNodeConfig({ ...nodeConfig, max_parallel: parseInt(e.target.value) || 3 })}
+                    fullWidth
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={nodeConfig.allow_dangerous || false}
+                        onChange={(e) => setNodeConfig({ ...nodeConfig, allow_dangerous: e.target.checked })}
+                      />
+                    }
+                    label="Allow Dangerous Operations"
+                  />
+                </>
+              )}
+
+              {selectedNode.type === 'intent_router' && (
+                <>
+                  <TextField
+                    label="Confidence Threshold"
+                    type="number"
+                    inputProps={{ step: 0.1, min: 0, max: 1 }}
+                    value={nodeConfig.confidence_threshold || 0.7}
+                    onChange={(e) => setNodeConfig({ ...nodeConfig, confidence_threshold: parseFloat(e.target.value) || 0.7 })}
+                    fullWidth
+                  />
+                </>
+              )}
+
+              {selectedNode.type === 'memory_store' && (
+                <>
+                  <TextField
+                    label="Max Memory Items"
+                    type="number"
+                    value={nodeConfig.max_items || 50}
+                    onChange={(e) => setNodeConfig({ ...nodeConfig, max_items: parseInt(e.target.value) || 50 })}
+                    fullWidth
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={nodeConfig.enable_summary || true}
+                        onChange={(e) => setNodeConfig({ ...nodeConfig, enable_summary: e.target.checked })}
+                      />
+                    }
+                    label="Enable Summary"
+                  />
+                </>
+              )}
+            </Box>
+
+            {/* Action Buttons */}
+            <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
+              <Button
+                variant="contained"
+                startIcon={<SaveIcon />}
+                onClick={saveNodeConfig}
+                sx={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                  },
+                }}
+              >
+                Save Configuration
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => setShowConfigPanel(false)}
+                sx={{ flex: 1 }}
+              >
+                Cancel
+              </Button>
+            </Box>
+
+            {/* Configuration JSON Preview */}
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="caption" color="text.secondary" gutterBottom>
+                Configuration JSON:
+              </Typography>
+              <Paper
+                sx={{
+                  p: 2,
+                  mt: 1,
+                  background: 'rgba(0, 0, 0, 0.05)',
+                  maxHeight: 200,
+                  overflow: 'auto',
+                }}
+              >
+                <pre style={{ margin: 0, fontSize: '0.75rem' }}>
+                  {JSON.stringify(nodeConfig, null, 2)}
+                </pre>
+              </Paper>
+            </Box>
+          </Box>
+        )}
+      </Drawer>
     </Box>
   );
 };

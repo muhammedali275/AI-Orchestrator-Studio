@@ -1,79 +1,47 @@
-# LLM Connections and UI Improvements - COMPLETED ✅
+# LLM API Key Authentication Implementation TODO
 
-## Implementation Status
+## Current Task: Fix API Key Authentication for Production LLM Integration
 
-### ✅ 1. LLM Connections - Optional API Tokens for Local LLMs
-**File:** `frontend/src/pages/LLMConnections.tsx`
-- [x] Added automatic detection of local LLM servers
-- [x] Made API key field optional when local LLM is detected
-- [x] Added contextual help text
-- [x] Updated form validation
+### Status: IN PROGRESS
 
-### ✅ 2. Tools & Data Sources - Clear Explanations
-**File:** `frontend/src/pages/ToolsDataSources.tsx`
-- [x] Added comprehensive explanation section
-- [x] Explained Tools vs Data Sources difference
-- [x] Added descriptive subtitles under each tab
+### Steps to Complete:
 
-### ✅ 3. Credentials & Security - Enhanced with Optional Items
-**File:** `frontend/src/pages/CredentialsSecurity.tsx`
-- [x] Added new credential types (HTTPS cert, IP allowlist, token)
-- [x] Added explanation section for required vs optional credentials
-- [x] Updated security best practices
+- [ ] 1. Update LLM Client with authentication detection and validation
+  - [ ] Add method to detect cloud LLM providers
+  - [ ] Add method to detect on-premise authentication requirements
+  - [ ] Support multiple authentication methods (Bearer, API Key, Basic Auth, Custom)
+  - [ ] Validate authentication before requests
+  - [ ] Add authentication error handling
 
-### ✅ 4. Internal Chat - Auto-detect Ollama Models
-**File:** `frontend/src/pages/ChatStudio.tsx`
-- [x] Removed fallback models
-- [x] Added refresh button for models
-- [x] Better error handling
-- [x] Console logging for debugging
+- [ ] 2. Update LLM API endpoints
+  - [ ] Add authentication detection endpoint
+  - [ ] Add authentication validation endpoint
+  - [ ] Enhance test connection with auth validation
+  - [ ] Add separate "Test Authentication" endpoint
 
-## Additional Documentation Created
+- [ ] 3. Update Frontend LLM Config UI
+  - [ ] Add authentication type selector
+  - [ ] Add real-time authentication requirement detection
+  - [ ] Add visual warnings for missing authentication
+  - [ ] Add "Test Authentication" button
+  - [ ] Show authentication status indicators
 
-- [x] `LLM_UI_IMPROVEMENTS_SUMMARY.md` - Implementation summary
-- [x] `HOW_TO_CONFIGURE_SYSTEM.md` - Complete configuration guide
+- [ ] 4. Create documentation
+  - [ ] Authentication requirements guide
+  - [ ] Production deployment authentication checklist
+  - [ ] Troubleshooting guide
 
-## Known Issues & Solutions
+### Files to Edit:
+1. backend/orchestrator/app/clients/llm_client.py
+2. backend/orchestrator/app/api/llm.py
+3. frontend/src/pages/LLMConfig.tsx
+4. Create: LLM_AUTHENTICATION_IMPLEMENTATION.md
 
-### Issue 1: Orchestration Flow Empty
-**Cause:** Flow needs to be configured with actual components
-**Solution:** See `HOW_TO_CONFIGURE_SYSTEM.md` for flow configuration examples
-
-### Issue 2: Data Sources Relationship Unclear
-**Cause:** Users don't understand how Data Sources relate to LLMs and Tools
-**Solution:** 
-- Added comprehensive explanation in Tools & Data Sources page
-- Created `HOW_TO_CONFIGURE_SYSTEM.md` with detailed examples
-- Shows how Data Sources provide context (RAG) to LLMs
-- Shows how Tools execute actions based on LLM decisions
-
-## How Components Work Together
-
-```
-User Request
-    ↓
-LLM (understands intent)
-    ↓
-Router (decides what to do)
-    ├─→ Data Sources (fetch relevant data for context)
-    ├─→ Tools (execute actions if needed)
-    └─→ LLM (generate response with context)
-    ↓
-Response to User
-```
-
-## Testing Completed
-
-- [x] LLM Connections UI updates
-- [x] Tools & Data Sources explanations
-- [x] Credentials & Security enhancements
-- [x] Chat Studio model loading improvements
-
-## Next Steps for User
-
-1. Start backend server (port 8000)
-2. Add LLM connection via UI
-3. Click refresh button in Chat Studio to load models
-4. Configure Data Sources and Tools as needed
-5. Create Orchestration Flow to connect components
-=======
+### Testing Required:
+- [ ] Test with OpenAI API
+- [ ] Test with Anthropic API
+- [ ] Test with Azure OpenAI
+- [ ] Test with on-premise LLM server (with auth)
+- [ ] Test with local Ollama (no auth)
+- [ ] Test authentication validation
+- [ ] Test error messages for missing auth

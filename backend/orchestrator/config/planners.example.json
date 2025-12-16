@@ -1,0 +1,125 @@
+{
+  "planners": [
+    {
+      "name": "default_sequential_planner",
+      "type": "sequential",
+      "enabled": true,
+      "strategy": "sequential",
+      "templates": {
+        "churn_analytics": {
+          "description": "Plan for customer churn analysis",
+          "steps": [
+            {
+              "id": "step_1",
+              "action": "data_retrieval",
+              "description": "Retrieve customer data from datasource"
+            },
+            {
+              "id": "step_2",
+              "action": "external_agent_call",
+              "description": "Analyze churn patterns using specialized agent",
+              "depends_on": ["step_1"]
+            },
+            {
+              "id": "step_3",
+              "action": "llm_synthesis",
+              "description": "Generate insights report",
+              "depends_on": ["step_2"]
+            }
+          ]
+        },
+        "data_query": {
+          "description": "Plan for data query execution",
+          "steps": [
+            {
+              "id": "step_1",
+              "action": "query_execution",
+              "description": "Execute query against datasource"
+            },
+            {
+              "id": "step_2",
+              "action": "result_formatting",
+              "description": "Format and present results",
+              "depends_on": ["step_1"]
+            }
+          ]
+        },
+        "web_search": {
+          "description": "Plan for web search tasks",
+          "steps": [
+            {
+              "id": "step_1",
+              "action": "tool_execution",
+              "description": "Execute web search tool"
+            },
+            {
+              "id": "step_2",
+              "action": "llm_synthesis",
+              "description": "Synthesize search results",
+              "depends_on": ["step_1"]
+            }
+          ]
+        },
+        "code_generation": {
+          "description": "Plan for code generation tasks",
+          "steps": [
+            {
+              "id": "step_1",
+              "action": "llm_code_gen",
+              "description": "Generate code using LLM"
+            },
+            {
+              "id": "step_2",
+              "action": "code_execution",
+              "description": "Execute generated code (if requested)",
+              "depends_on": ["step_1"]
+            }
+          ]
+        },
+        "general_llm": {
+          "description": "Plan for general LLM interactions",
+          "steps": [
+            {
+              "id": "step_1",
+              "action": "llm_call",
+              "description": "Process with LLM"
+            }
+          ]
+        }
+      },
+      "description": "Default sequential task planner with templates for common intents"
+    },
+    {
+      "name": "parallel_planner",
+      "type": "parallel",
+      "enabled": false,
+      "strategy": "parallel",
+      "templates": {
+        "multi_source_query": {
+          "description": "Query multiple data sources in parallel",
+          "steps": [
+            {
+              "id": "query_db1",
+              "action": "data_query",
+              "description": "Query first database",
+              "parallel_group": 1
+            },
+            {
+              "id": "query_db2",
+              "action": "data_query",
+              "description": "Query second database",
+              "parallel_group": 1
+            },
+            {
+              "id": "merge_results",
+              "action": "llm_synthesis",
+              "description": "Merge and analyze results",
+              "depends_on": ["query_db1", "query_db2"]
+            }
+          ]
+        }
+      },
+      "description": "Parallel task planner for concurrent execution (disabled by default)"
+    }
+  ]
+}

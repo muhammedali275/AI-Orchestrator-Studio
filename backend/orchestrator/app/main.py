@@ -17,6 +17,8 @@ from .api.llm import router as llm_router
 from .api.agents import router as agents_router
 from .api.datasources import router as datasources_router
 from .api.tools import router as tools_router
+from .api.routers import router as routers_router
+from .api.planners import router as planners_router
 from .api.monitoring import router as monitoring_router
 from .api.memory import router as memory_router
 from .api.credentials import router as credentials_router
@@ -25,6 +27,8 @@ from .api.config_management import router as config_router
 from .api.topology_execution import router as topology_router
 from .api.files import router as files_router
 from .api.api_keys import router as api_keys_router
+from .api.frontend_config import router as frontend_config_router
+from .api.memory_management import router as memory_management_router
 from .db.database import init_db
 
 # Configure logging
@@ -190,6 +194,8 @@ app.include_router(llm_router)
 app.include_router(agents_router)
 app.include_router(datasources_router)
 app.include_router(tools_router)
+app.include_router(routers_router)
+app.include_router(planners_router)
 app.include_router(monitoring_router)
 app.include_router(memory_router)
 app.include_router(credentials_router)
@@ -198,6 +204,8 @@ app.include_router(config_router)
 app.include_router(topology_router)
 app.include_router(files_router)
 app.include_router(api_keys_router)
+app.include_router(frontend_config_router)
+app.include_router(memory_management_router)
 
 # Ensure chat_ui_router is registered
 from app.api.chat_ui import router as chat_ui_router_direct

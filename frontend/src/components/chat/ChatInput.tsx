@@ -15,9 +15,10 @@ import {
 interface ChatInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled = false }) => {
+const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled = false, placeholder = "Type your message... (Shift+Enter for new line)" }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const [message, setMessage] = useState('');
@@ -56,7 +57,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled = false }) => {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type your message... (Shift+Enter for new line)"
+          placeholder={placeholder}
           disabled={disabled}
           variant="outlined"
           sx={{

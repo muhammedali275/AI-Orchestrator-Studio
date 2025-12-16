@@ -2,22 +2,48 @@
 LLM Client - Generic interface for LLM interactions.
 
 Uses Settings for configuration - no hard-coded endpoints.
+Supports authentication for both cloud and on-premise LLM servers.
 """
 
 import logging
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
+from enum import Enum
 import httpx
 from ..config import Settings
 
 logger = logging.getLogger(__name__)
 
 
+class AuthType(Enum):
+    """Authentication types supported."""
+    NONE = "none"
+    BEARER = "bearer"
+    API_KEY = "api_key"
+    BASIC = "basic"
+    CUSTOM = "custom"
+
+
+class LLMProvider(Enum):
+    """Known LLM providers."""
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+    AZURE = "azure"
+    COHERE = "cohere"
+    HUGGINGFACE = "huggingface"
+    OLLAMA = "ollama"
+    VLLM = "vllm"
+    TEXTGEN_WEBUI = "textgen_webui"
+    LLAMACPP = "llamacpp"
+    CUSTOM = "custom"
+
+
 class LLMClient:
     """
     Generic LLM client that uses configuration from Settings.
     
-    Supports retry logic, fallback models, and timeout handling.
+    Supports retry logic, fallback models, timeout handling, and comprehensive authentication.
+    Validates authentication requirements for both cloud and on-premise LLM servers.
     """
     
     def __init__(self, settings: Settings):
@@ -34,22 +60,194 @@ class LLMClient:
         self.max_retries = settings.llm_max_retries
         self.api_key = settings.llm_api_key
         
+        # Detect provider and authentication requirements
+        self.provider = self._detect_provider()
+        self.auth_type = self._detect_auth_type()
+        self.requires_auth = self._check_auth_required()
+        
         # HTTP client for making requests
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(self.timeout),
             headers=self._get_headers()
         )
     
+    def _detect_provider(self) -> LLMProvider:
+        """
+        Detect LLM provider from base URL.
+        
+        Returns:
+            LLMProvider enum value
+        """
+        if not self.base_url:
+            return LLMProvider.CUSTOM
+        
+        url_lower = self.base_url.lower()
+        
+        # Cloud providers
+        if "api.openai.com" in url_lower or "openai.azure.com" in url_lower:
+            return LLMProvider.AZURE if "azure" in url_lower else LLMProvider.OPENAI
+        elif "api.anthropic.com" in url_lower or "anthropic" in url_lower:
+            return LLMProvider.ANTHROPIC
+        elif "api.cohere.ai" in url_lower or "cohere" in url_lower:
+            return LLMProvider.COHERE
+        elif "huggingface" in url_lower or "hf.co" in url_lower:
+            return LLMProvider.HUGGINGFACE
+        
+        # On-premise / Local providers
+        elif "11434" in url_lower or "ollama" in url_lower:
+            return LLMProvider.OLLAMA
+        elif "vllm" in url_lower or ":8000" in url_lower:
+            return LLMProvider.VLLM
+        elif "text-generation-webui" in url_lower or ":5000" in url_lower or ":7860" in url_lower:
+            return LLMProvider.TEXTGEN_WEBUI
+        elif "llama.cpp" in url_lower or "llamacpp" in url_lower or ":8080" in url_lower:
+            return LLMProvider.LLAMACPP
+        
+        return LLMProvider.CUSTOM
+    
+    def _detect_auth_type(self) -> AuthType:
+        """
+        Detect authentication type based on provider and configuration.
+        
+        Returns:
+            AuthType enum value
+        """
+        if not self.api_key:
+            return AuthType.NONE
+        
+        # Cloud providers typically use Bearer tokens
+        if self.provider in [LLMProvider.OPENAI, LLMProvider.ANTHROPIC, 
+                            LLMProvider.COHERE, LLMProvider.AZURE]:
+            return AuthType.BEARER
+        
+        # On-premise servers may use various auth methods
+        # Default to Bearer for any API key provided
+        return AuthType.BEARER
+    
+    def _check_auth_required(self) -> bool:
+        """
+        Check if authentication is required for the detected provider.
+        
+        Returns:
+            True if authentication is required, False otherwise
+        """
+        # Cloud providers ALWAYS require authentication
+        cloud_providers = [
+            LLMProvider.OPENAI,
+            LLMProvider.ANTHROPIC,
+            LLMProvider.COHERE,
+            LLMProvider.AZURE,
+            LLMProvider.HUGGINGFACE
+        ]
+        
+        if self.provider in cloud_providers:
+            return True
+        
+        # Local providers typically don't require auth (but may support it)
+        local_providers = [
+            LLMProvider.OLLAMA,
+            LLMProvider.LLAMACPP
+        ]
+        
+        if self.provider in local_providers:
+            # Check if it's actually localhost
+            if self.base_url and ("localhost" in self.base_url or "127.0.0.1" in self.base_url):
+                return False
+            # If it's a remote server, authentication is recommended
+            return True
+        
+        # For vLLM and TextGen WebUI, check if it's remote
+        if self.provider in [LLMProvider.VLLM, LLMProvider.TEXTGEN_WEBUI]:
+            if self.base_url and ("localhost" in self.base_url or "127.0.0.1" in self.base_url):
+                return False
+            return True
+        
+        # For custom providers, assume auth is required if not localhost
+        if self.base_url and not ("localhost" in self.base_url or "127.0.0.1" in self.base_url):
+            return True
+        
+        return False
+    
+    def validate_authentication(self) -> Tuple[bool, str]:
+        """
+        Validate that authentication is properly configured.
+        
+        Returns:
+            Tuple of (is_valid, message)
+        """
+        # Check if authentication is required
+        if not self.requires_auth:
+            return True, "Authentication not required for this provider"
+        
+        # Check if API key is provided
+        if not self.api_key:
+            provider_name = self.provider.value.upper()
+            if self.provider in [LLMProvider.OPENAI, LLMProvider.ANTHROPIC, 
+                                LLMProvider.COHERE, LLMProvider.AZURE]:
+                return False, f"API key is REQUIRED for {provider_name}. Please provide a valid API key."
+            else:
+                return False, f"Authentication is recommended for remote {provider_name} server. Please provide an API key or token."
+        
+        # Validate API key format for known providers
+        if self.provider == LLMProvider.OPENAI:
+            if not self.api_key.startswith("sk-"):
+                return False, "OpenAI API key should start with 'sk-'"
+        elif self.provider == LLMProvider.ANTHROPIC:
+            if not self.api_key.startswith("sk-ant-"):
+                return False, "Anthropic API key should start with 'sk-ant-'"
+        elif self.provider == LLMProvider.COHERE:
+            if len(self.api_key) < 20:
+                return False, "Cohere API key appears to be invalid (too short)"
+        
+        return True, "Authentication configured correctly"
+    
     def _get_headers(self) -> Dict[str, str]:
-        """Build request headers."""
+        """
+        Build request headers with appropriate authentication.
+        
+        Returns:
+            Dictionary of HTTP headers
+        """
         headers = {
             "Content-Type": "application/json",
         }
         
         if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            if self.auth_type == AuthType.BEARER:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+            elif self.auth_type == AuthType.API_KEY:
+                # Some providers use X-API-Key header
+                headers["X-API-Key"] = self.api_key
+            elif self.auth_type == AuthType.CUSTOM:
+                # For custom auth, use Bearer as default
+                headers["Authorization"] = f"Bearer {self.api_key}"
+        
+        # Provider-specific headers
+        if self.provider == LLMProvider.ANTHROPIC:
+            headers["anthropic-version"] = "2023-06-01"
         
         return headers
+    
+    def _mask_api_key(self, text: str) -> str:
+        """
+        Mask API key in text for logging.
+        
+        Args:
+            text: Text that may contain API key
+            
+        Returns:
+            Text with API key masked
+        """
+        if not self.api_key or not text:
+            return text
+        
+        # Mask the API key, showing only first 4 and last 4 characters
+        if len(self.api_key) > 8:
+            masked = f"{self.api_key[:4]}...{self.api_key[-4:]}"
+        else:
+            masked = "****"
+        
+        return text.replace(self.api_key, masked)
     
     async def call(
         self,
@@ -81,6 +279,26 @@ class LLMClient:
         model = model or self.default_model
         if not model:
             raise ValueError("No LLM model specified and no default configured")
+
+        # Normalize standardized model ids like "ollama:llama2" -> "llama2" for provider endpoints
+        def _normalize_model_for_provider(raw: str) -> str:
+            try:
+                if not raw:
+                    return raw
+                lowered = raw.lower()
+                # Known provider prefixes to strip
+                prefixes = [
+                    "ollama:", "openai:", "anthropic:", "azure:", "cohere:",
+                    "huggingface:", "vllm:", "llamacpp:", "textgen_webui:", "custom:"
+                ]
+                for p in prefixes:
+                    if lowered.startswith(p):
+                        return raw.split(":", 1)[1]
+                return raw
+            except Exception:
+                return raw
+
+        model = _normalize_model_for_provider(model)
         
         temperature = temperature if temperature is not None else self.settings.llm_temperature
         max_tokens = max_tokens or self.settings.llm_max_tokens

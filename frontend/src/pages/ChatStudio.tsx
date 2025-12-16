@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import {
   Box,
   Paper,
@@ -23,16 +24,36 @@ import {
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
   Settings as SettingsIcon,
+  BugReport as BugReportIcon,
+  Timeline as TimelineIcon,
+  Build as BuildIcon,
+  Speed as SpeedIcon,
 } from '@mui/icons-material';
 import ConversationList from '../components/chat/ConversationList';
 import ChatMessage from '../components/chat/ChatMessage';
 import ChatInput from '../components/chat/ChatInput';
+// App version sourced from env (set at build/start). Fallback to 'dev'.
+const APP_VERSION = (process.env as any)?.REACT_APP_VERSION || 'dev';
 
 interface Message {
   id: string;
   role: string;
   content: string;
-  metadata?: any;
+  metadata?: {
+    tools_used?: Array<{
+      name: string;
+      input: any;
+      output: any;
+      duration_ms: number;
+    }>;
+    execution_steps?: Array<{
+      step: string;
+      timestamp: string;
+      status: string;
+    }>;
+    model?: string;
+    tokens?: number;
+  };
   created_at: string;
 }
 
@@ -74,9 +95,16 @@ const ChatStudio: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [useMemory, setUseMemory] = useState(true);
   const [useTools, setUseTools] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
+  const [showExecutionPanel, setShowExecutionPanel] = useState(false);
+  const [requestTimeout, setRequestTimeout] = useState<number>(120000); // Dynamic timeout from backend
+  const [memoryInfo, setMemoryInfo] = useState<any | null>(null);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [llmStatus, setLlmStatus] = useState<{ source?: string; server_url?: string; error?: string } | null>(null);
 
-  // Load initial data
+  // Load configuration and initial data on mount
   useEffect(() => {
+    loadConfig(); // Load timeout and other config from backend
     loadConversations();
     loadModels();
     loadRoutingProfiles();
@@ -92,7 +120,26 @@ const ChatStudio: React.FC = () => {
   };
 
   // API base URL
-  const API_BASE_URL = 'http://localhost:8001'; // Use the Chat Studio API server port
+  const API_BASE_URL = 'http://localhost:8000'; // Backend API server port
+
+  /**
+   * Load configuration from backend.
+   * This ensures frontend and backend timeouts are synchronized.
+   */
+  const loadConfig = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/config/timeout`, {
+        timeout: 5000, // Short timeout for config endpoint
+      });
+      if (response.data && response.data.frontend_timeout_ms) {
+        setRequestTimeout(response.data.frontend_timeout_ms);
+        console.log('[ChatStudio] Loaded config - timeout:', response.data.frontend_timeout_ms, 'ms');
+      }
+    } catch (err) {
+      console.warn('[ChatStudio] Failed to load config, using default 120s timeout:', err);
+      setRequestTimeout(120000); // Fallback to 120 seconds
+    }
+  };
 
   const loadConversations = async () => {
     try {
@@ -109,10 +156,17 @@ const ChatStudio: React.FC = () => {
   const loadModels = async () => {
     try {
       console.log('[ChatStudio] Fetching models from:', `${API_BASE_URL}/api/chat/ui/models`);
-      const response = await fetch(`${API_BASE_URL}/api/chat/ui/models`);
-      const data = await response.json();
+      // Use axios with dynamic timeout from backend
+      const response = await axios.get(`${API_BASE_URL}/api/chat/ui/models`, {
+        // Limit model discovery timeout to 15s so UI remains responsive
+        timeout: 15000,
+      });
+      const data = response.data;
       console.log('[ChatStudio] Models response:', data);
       
+      // Update LLM connectivity status
+      setLlmStatus({ source: data.source, server_url: data.server_url, error: data.error });
+
       if (data.success && data.models && data.models.length > 0) {
         setModels(data.models);
         if (data.default_model) {
@@ -122,13 +176,34 @@ const ChatStudio: React.FC = () => {
         }
         setError(null);
       } else {
-        // No models available
-        setError('No LLM models configured. Please add an LLM connection first.');
-        setModels([]);
+        // Handle different error scenarios
+        let errorMessage = data.message || 'No LLM models available.';
+        
+        // Add helpful link to configuration page
+        if (data.error === 'not_configured' || data.error === 'connection_error') {
+          errorMessage += ' Go to Settings > LLM Configuration to set up your LLM connection.';
+        } else if (data.error === 'no_models') {
+          errorMessage += ' Please install models on your LLM server.';
+        } else if (data.error === 'timeout' && data.default_model) {
+          errorMessage += ` Using default model: ${data.default_model}.`;
+        }
+        
+        setError(errorMessage);
+        // If backend provided a default model fallback, surface it
+        if (data.models && data.models.length > 0) {
+          setModels(data.models);
+          setSelectedModel(data.default_model || data.models[0].id);
+        } else {
+          setModels([]);
+        }
+        console.warn('[ChatStudio] No models available:', data);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error loading models:', err);
-      setError('Failed to load models. Please check if the backend is running and LLM is configured.');
+      const errorMsg = err.code === 'ECONNABORTED' 
+        ? 'Connection to LLM server timed out (15s). Server may be offline or very slow.'
+        : 'Failed to connect to backend server. Please check if the backend is running on port 8000.';
+      setError(errorMsg);
       setModels([]);
     }
   };
@@ -220,6 +295,39 @@ const ChatStudio: React.FC = () => {
     }
   };
 
+  const handleViewMemory = async () => {
+    if (!selectedConversation) return;
+    setMemoryLoading(true);
+    setError(null);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/memory/conversations/${selectedConversation.id}`, {
+        timeout: 15000,
+      });
+      setMemoryInfo(res.data);
+    } catch (err) {
+      console.error('Error loading memory info:', err);
+      setError('Failed to load memory for conversation');
+    } finally {
+      setMemoryLoading(false);
+    }
+  };
+
+  const handleClearMemory = async () => {
+    if (!selectedConversation) return;
+    setMemoryLoading(true);
+    setError(null);
+    try {
+      await axios.delete(`${API_BASE_URL}/api/memory/conversations/${selectedConversation.id}`, {
+        timeout: 15000,
+      });
+      setMemoryInfo(null);
+    } catch (err) {
+      console.error('Error clearing memory:', err);
+      setError('Failed to clear memory for conversation');
+    } finally {
+      setMemoryLoading(false);
+    }
+  };
   const handleSendMessage = async (message: string) => {
     if (!message.trim()) return;
 
@@ -227,34 +335,80 @@ const ChatStudio: React.FC = () => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/chat/ui/send`, {
+      // Prefer SSE streaming for better UX
+      const payload = {
+        conversation_id: selectedConversation?.id,
+        message: message,
+        model_id: selectedModel,
+        routing_profile: selectedProfile,
+        use_memory: useMemory,
+        use_tools: useTools,
+      };
+
+      const streamUrl = `${API_BASE_URL}/api/chat/ui/send/stream`;
+
+      // Create a temporary assistant message to append streamed tokens
+      const tempId = `temp_${Date.now()}`;
+      setMessages(prev => ([
+        ...prev,
+        { id: tempId, role: 'user', content: message, created_at: new Date().toISOString() },
+        { id: `${tempId}_assistant`, role: 'assistant', content: '', created_at: new Date().toISOString() },
+      ]));
+
+      // Use EventSource via fetch-based polyfill for sending POST body
+      const controller = new AbortController();
+      const timeoutMs = requestTimeout || 120000;
+      const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+      const response = await fetch(streamUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversation_id: selectedConversation?.id,
-          message: message,
-          model_id: selectedModel,
-          routing_profile: selectedProfile,
-          use_memory: useMemory,
-          use_tools: useTools,
-        }),
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
-      const data = await response.json();
-
-      if (data.conversation_id) {
-        // Reload conversation if it was just created
-        if (!selectedConversation) {
-          await loadConversations();
-          const conv = conversations.find(c => c.id === data.conversation_id);
-          if (conv) setSelectedConversation(conv);
-        }
-        // Reload messages
-        await loadConversationMessages(data.conversation_id);
+      if (!response.ok) {
+        throw new Error(`Stream failed with status ${response.status}`);
       }
-    } catch (err) {
-      console.error('Error sending message:', err);
-      setError('Failed to send message');
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let assistantContent = '';
+
+      if (reader) {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          // Parse SSE frames: lines starting with 'data: '
+          const lines = chunk.split(/\r?\n/);
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const token = line.slice(6);
+              assistantContent += token;
+              setMessages(prev => prev.map(m => (
+                m.id === `${tempId}_assistant` ? { ...m, content: assistantContent } : m
+              )));
+            } else if (line.startsWith('event: done')) {
+              // Completion event
+              clearTimeout(timeoutHandle);
+            }
+          }
+        }
+      }
+
+      // After streaming completes, reload messages from backend to get final metadata
+      if (selectedConversation?.id) {
+        await loadConversationMessages(selectedConversation.id);
+      } else {
+        await loadConversations();
+      }
+    } catch (err: any) {
+      console.error('Error streaming message:', err);
+      const errorMsg = err.name === 'AbortError'
+        ? `Streaming timed out (${Math.round((requestTimeout || 120000) / 1000)}s).`
+        : 'Failed to stream message';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -302,7 +456,7 @@ const ChatStudio: React.FC = () => {
             alignItems: 'center',
           }}
         >
-          <FormControl size="small" sx={{ minWidth: 200 }}>
+          <FormControl size="small" sx={{ minWidth: 200 }} error={models.length === 0 && error !== null}>
             <InputLabel>Model</InputLabel>
             <Select
               value={selectedModel}
@@ -312,7 +466,7 @@ const ChatStudio: React.FC = () => {
             >
               {models.length === 0 ? (
                 <MenuItem value="" disabled>
-                  No models available
+                  {error ? 'No models - Configure LLM' : 'Loading...'}
                 </MenuItem>
               ) : (
                 models.map((model) => (
@@ -324,18 +478,41 @@ const ChatStudio: React.FC = () => {
             </Select>
           </FormControl>
 
-          <Tooltip title="Refresh Models">
-            <IconButton
-              size="small"
-              onClick={loadModels}
-              sx={{
-                background: 'rgba(102, 126, 234, 0.1)',
-                '&:hover': { background: 'rgba(102, 126, 234, 0.2)' },
-              }}
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          <IconButton size="small" onClick={loadModels} title="Reload models">
+            <RefreshIcon />
+          </IconButton>
+
+          <IconButton size="small" title="Settings">
+            <SettingsIcon />
+          </IconButton>
+
+          <Box sx={{ flex: 1 }} />
+
+          {/* LLM Connectivity Badge */}
+          {llmStatus && (
+            <Chip
+              label={llmStatus.error
+                ? `LLM: Disconnected`
+                : llmStatus.source === 'ollama-local'
+                ? `LLM: Local`
+                : llmStatus.source
+                ? `LLM: ${llmStatus.source}`
+                : 'LLM: Unknown'}
+              color={llmStatus.error ? 'warning' : 'success'}
+              variant="outlined"
+              sx={{ mr: 1 }}
+            />
+          )}
+
+          {/* Version + Copyright */}
+          <Box sx={{ textAlign: 'right', mr: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              v{APP_VERSION}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block">
+              © 2025 Muhammed Ali
+            </Typography>
+          </Box>
 
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel>Routing Profile</InputLabel>
@@ -352,82 +529,106 @@ const ChatStudio: React.FC = () => {
             </Select>
           </FormControl>
 
-          <Box sx={{ flex: 1 }} />
-
-          <Tooltip title={useMemory ? 'Memory: ON' : 'Memory: OFF'}>
-            <Chip
-              label="Memory"
-              color={useMemory ? 'primary' : 'default'}
-              onClick={() => setUseMemory(!useMemory)}
+          <Tooltip title="Debug mode">
+            <IconButton
               size="small"
-            />
+              onClick={() => setDebugMode(!debugMode)}
+              color={debugMode ? 'primary' : 'default'}
+            >
+              <BugReportIcon />
+            </IconButton>
           </Tooltip>
 
-          <Tooltip title={useTools ? 'Tools: ON' : 'Tools: OFF'}>
-            <Chip
-              label="Tools"
-              color={useTools ? 'primary' : 'default'}
-              onClick={() => setUseTools(!useTools)}
-              size="small"
-            />
-          </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={handleViewMemory}
+            disabled={!selectedConversation || memoryLoading}
+          >
+            {memoryLoading ? 'Loading Memory…' : 'View Memory'}
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            onClick={handleClearMemory}
+            disabled={!selectedConversation || memoryLoading}
+          >
+            Clear Memory
+          </Button>
         </Box>
+
+        {/* Error Banner */}
+        {error && (
+          <Alert severity="warning" sx={{ m: 2 }}>
+            {error}
+          </Alert>
+        )}
 
         {/* Messages Area */}
         <Box
           sx={{
             flex: 1,
-            overflow: 'auto',
-            p: 3,
+            overflowY: 'auto',
+            p: 2,
             display: 'flex',
             flexDirection: 'column',
             gap: 2,
           }}
         >
-          {error && (
-            <Alert severity="error" onClose={() => setError(null)}>
-              {error}
-            </Alert>
+          {memoryInfo && (
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Conversation Memory
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Messages in memory: {memoryInfo.message_count} · Tokens: {memoryInfo.total_tokens} · Size: {(memoryInfo.size_bytes / (1024)).toFixed(1)} KB
+              </Typography>
+              <Divider sx={{ my: 1 }} />
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 240, overflowY: 'auto' }}>
+                {(memoryInfo.memory_entries || []).map((entry: any, idx: number) => (
+                  <Box key={idx} sx={{ p: 1, borderRadius: 1, bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }}>
+                    <Typography variant="caption" color="textSecondary">
+                      {entry.role} {entry.tokens ? `· ${entry.tokens} tokens` : ''}
+                    </Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{entry.content}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
           )}
-
-          {messages.length === 0 && !selectedConversation && (
+          {messages.length === 0 ? (
             <Box
               sx={{
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                flexDirection: 'column',
-                gap: 2,
               }}
             >
-              <Typography variant="h5" color="text.secondary">
-                Welcome to Chat Studio
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography color="textSecondary" align="center">
+                Welcome to Chat Studio<br />
                 Start a new conversation or select an existing one
               </Typography>
             </Box>
+          ) : (
+            messages.map((msg) => (
+              <ChatMessage key={msg.id} message={msg} />
+            ))
           )}
-
-          {messages.map((message) => (
-            <ChatMessage key={message.id} message={message} />
-          ))}
-
-          {loading && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <CircularProgress size={20} />
-              <Typography variant="body2" color="text.secondary">
-                Thinking...
-              </Typography>
-            </Box>
-          )}
-
           <div ref={messagesEndRef} />
         </Box>
 
         {/* Input Area */}
-        <ChatInput onSend={handleSendMessage} disabled={loading} />
+        <Box sx={{ p: 2, borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}` }}>
+          <ChatInput
+            onSend={handleSendMessage}
+            disabled={loading || !selectedModel}
+            placeholder={loading ? 'Waiting for response...' : 'Type your message...'}
+          />
+        </Box>
       </Paper>
     </Box>
   );

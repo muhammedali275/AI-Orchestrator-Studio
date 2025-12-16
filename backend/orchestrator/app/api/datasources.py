@@ -126,6 +126,9 @@ async def create_datasource(
         # Add to settings
         settings.add_datasource(ds_config)
         
+        # Clear cache to reload settings
+        clear_settings_cache()
+        
         logger.info(f"[DataSources API] Created datasource: {datasource.name}")
         
         return {
@@ -180,6 +183,9 @@ async def update_datasource(
         # Update in settings
         settings.add_datasource(ds_config)
         
+        # Clear cache to reload settings
+        clear_settings_cache()
+        
         logger.info(f"[DataSources API] Updated datasource: {name}")
         
         return {
@@ -215,6 +221,9 @@ async def delete_datasource(
             status_code=404,
             detail=f"DataSource '{name}' not found"
         )
+    
+    # Clear cache to reload settings
+    clear_settings_cache()
     
     logger.info(f"[DataSources API] Deleted datasource: {name}")
     

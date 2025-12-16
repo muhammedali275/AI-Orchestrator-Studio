@@ -112,6 +112,9 @@ async def create_tool(
         # Add to settings
         settings.add_tool(tool_config)
         
+        # Clear cache to reload settings
+        clear_settings_cache()
+        
         logger.info(f"[Tools API] Created tool: {tool.name}")
         
         return {
@@ -164,6 +167,9 @@ async def update_tool(
         # Update in settings
         settings.add_tool(tool_config)
         
+        # Clear cache to reload settings
+        clear_settings_cache()
+        
         logger.info(f"[Tools API] Updated tool: {name}")
         
         return {
@@ -200,6 +206,9 @@ async def delete_tool(
             detail=f"Tool '{name}' not found"
         )
     
+    # Clear cache to reload settings
+    clear_settings_cache()
+    
     logger.info(f"[Tools API] Deleted tool: {name}")
     
     return {
@@ -226,6 +235,9 @@ async def test_tool(
     Returns:
         Test result with detailed status
     """
+    import socket
+    from urllib.parse import urlparse
+    
     tool_config = settings.get_tool(name)
     
     if not tool_config:
@@ -286,32 +298,116 @@ async def test_tool(
         # For HTTP tools, test connectivity
         if tool_config.type == "http_request" and "base_url" in tool_config.config:
             import httpx
+            import asyncio
+            
+            url = tool_config.config["base_url"]
+            
+            # Get timeout from tool config or use default
+            timeout_seconds = tool_config.config.get("timeout", tool_config.config.get("timeout_seconds", 30))
+            if isinstance(timeout_seconds, str):
+                timeout_seconds = int(timeout_seconds)
+            
             try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    url = tool_config.config["base_url"]
-                    response = await client.get(url)
+                # Parse URL to get host and port
+                parsed_url = urlparse(url)
+                host = parsed_url.hostname or "localhost"
+                port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
+                
+                # Step 1: Check if port is open (TCP connectivity)
+                logger.info(f"[Tools API] Testing TCP connectivity to {host}:{port}")
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(5)  # 5 second timeout for port check
+                
+                try:
+                    port_result = sock.connect_ex((host, port))
+                    sock.close()
                     
-                    is_reachable = response.status_code < 400
+                    if port_result != 0:
+                        result.update({
+                            "success": False,
+                            "connectivity_tested": True,
+                            "connectivity_status": "port_closed",
+                            "endpoint_url": url,
+                            "host": host,
+                            "port": port,
+                            "error": "Port not reachable",
+                            "message": f"Cannot connect to {host}:{port}. Port appears to be closed or host is unreachable.",
+                            "suggestion": "Verify the service is running and the host/port are correct. Check firewall settings."
+                        })
+                        return result
+                    
+                    logger.info(f"[Tools API] Port {port} is open on {host}")
+                    
+                except socket.gaierror as e:
+                    result.update({
+                        "success": False,
+                        "connectivity_tested": True,
+                        "connectivity_status": "dns_error",
+                        "endpoint_url": url,
+                        "host": host,
+                        "error": "DNS resolution failed",
+                        "error_detail": str(e),
+                        "message": f"Cannot resolve hostname '{host}'. DNS lookup failed.",
+                        "suggestion": "Check if the hostname is correct and DNS is working."
+                    })
+                    return result
+                
+                except socket.timeout:
+                    result.update({
+                        "success": False,
+                        "connectivity_tested": True,
+                        "connectivity_status": "port_timeout",
+                        "endpoint_url": url,
+                        "host": host,
+                        "port": port,
+                        "error": "Port check timeout",
+                        "message": f"Connection to {host}:{port} timed out. Host may be unreachable or blocking connections.",
+                        "suggestion": "Check network connectivity and firewall rules."
+                    })
+                    return result
+                
+                # Step 2: Try HTTP request with proper timeout
+                logger.info(f"[Tools API] Testing HTTP connectivity to {url} with {timeout_seconds}s timeout")
+                
+                async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                    # Try HEAD request first (lighter), fallback to GET
+                    try:
+                        response = await client.head(url, follow_redirects=True)
+                    except (httpx.HTTPStatusError, httpx.RequestError):
+                        # If HEAD fails, try GET
+                        response = await client.get(url, follow_redirects=True)
+                    
+                    is_reachable = response.status_code < 500
+                    
                     result.update({
                         "success": is_reachable,
                         "connectivity_tested": True,
                         "connectivity_status": "reachable" if is_reachable else "unreachable",
                         "status_code": response.status_code,
                         "endpoint_url": url,
+                        "host": host,
+                        "port": port,
+                        "response_time_ms": int(response.elapsed.total_seconds() * 1000),
                         "message": f"Tool endpoint is {'reachable' if is_reachable else 'unreachable'} (HTTP {response.status_code})"
                     })
+                    
+                    if not is_reachable:
+                        result["suggestion"] = "Service returned a server error. Check service logs and configuration."
+                    
                     return result
                     
             except httpx.ConnectError as e:
                 result.update({
                     "success": False,
                     "connectivity_tested": True,
-                    "connectivity_status": "unreachable",
-                    "endpoint_url": tool_config.config.get("base_url"),
+                    "connectivity_status": "connection_refused",
+                    "endpoint_url": url,
+                    "host": host,
+                    "port": port,
                     "error": "Connection refused",
                     "error_detail": str(e),
-                    "message": "Cannot connect to tool endpoint. The target service may not be running.",
-                    "suggestion": "Ensure the tool's target service is running and accessible, or use 'skip_connectivity=true' to save without testing."
+                    "message": f"Connection refused by {host}:{port}. Service may not be running or not accepting connections.",
+                    "suggestion": "Ensure the service is running and listening on the correct port. Check service logs."
                 })
                 return result
                 
@@ -319,12 +415,29 @@ async def test_tool(
                 result.update({
                     "success": False,
                     "connectivity_tested": True,
-                    "connectivity_status": "timeout",
-                    "endpoint_url": tool_config.config.get("base_url"),
-                    "error": "Connection timeout",
+                    "connectivity_status": "http_timeout",
+                    "endpoint_url": url,
+                    "host": host,
+                    "port": port,
+                    "timeout_seconds": timeout_seconds,
+                    "error": "HTTP request timeout",
                     "error_detail": str(e),
-                    "message": "Tool endpoint connection timed out after 5 seconds.",
-                    "suggestion": "Check if the service is running or increase timeout in tool configuration."
+                    "message": f"HTTP request to {url} timed out after {timeout_seconds} seconds.",
+                    "suggestion": f"Service is slow to respond. Try increasing timeout in tool configuration or check service performance."
+                })
+                return result
+            
+            except httpx.HTTPStatusError as e:
+                result.update({
+                    "success": False,
+                    "connectivity_tested": True,
+                    "connectivity_status": "http_error",
+                    "endpoint_url": url,
+                    "status_code": e.response.status_code,
+                    "error": f"HTTP {e.response.status_code}",
+                    "error_detail": str(e),
+                    "message": f"Service returned HTTP {e.response.status_code}: {e.response.reason_phrase}",
+                    "suggestion": "Check if authentication is required or if the endpoint path is correct."
                 })
                 return result
                 
@@ -333,11 +446,11 @@ async def test_tool(
                     "success": False,
                     "connectivity_tested": True,
                     "connectivity_status": "error",
-                    "endpoint_url": tool_config.config.get("base_url"),
+                    "endpoint_url": url,
                     "error": type(e).__name__,
                     "error_detail": str(e),
                     "message": f"Failed to connect to tool endpoint: {str(e)}",
-                    "suggestion": "Verify the endpoint URL and network connectivity."
+                    "suggestion": "Verify the endpoint URL, network connectivity, and service status."
                 })
                 return result
         

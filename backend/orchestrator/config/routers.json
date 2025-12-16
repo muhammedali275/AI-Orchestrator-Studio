@@ -1,0 +1,19 @@
+{
+  "routers": [
+    {
+      "name": "test_keyword_router",
+      "type": "keyword",
+      "enabled": true,
+      "priority": 10,
+      "rules": {
+        "keywords": {
+          "churn": "churn_analytics",
+          "query": "data_query",
+          "search": "web_search"
+        },
+        "case_sensitive": false
+      },
+      "description": "Test keyword-based router"
+    }
+  ]
+}

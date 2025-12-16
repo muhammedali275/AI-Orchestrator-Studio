@@ -19,7 +19,8 @@
         "api_key": "",
         "timeout": "30",
         "base_url": "http://10.222.38.111:4000/cubejs-api/v1/load",
-        "headers": {}
+        "headers": {},
+        "auth_token": "secret"
       },
       "enabled": true,
       "description": null

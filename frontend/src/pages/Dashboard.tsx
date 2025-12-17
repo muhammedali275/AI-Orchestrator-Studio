@@ -14,6 +14,7 @@ import {
   Tooltip,
   Button,
 } from '@mui/material';
+import { keyframes } from '@mui/system';
 import {
   Speed as SpeedIcon,
   Memory as MemoryIcon,
@@ -33,6 +34,7 @@ import {
   Link as LinkIcon,
   ArrowForward as ArrowForwardIcon,
   Settings as SettingsIcon,
+  Mic as MicIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -56,6 +58,11 @@ interface QuickLink {
   icon: JSX.Element;
   color: string;
 }
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`;
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -346,6 +353,96 @@ const Dashboard: React.FC = () => {
               Quick Actions
             </Typography>
             <Grid container spacing={2}>
+              {/* Voice Assistant Card (AI Assistant - Try Now) */}
+              <Grid item xs={12}>
+                <Card
+                  onClick={() => navigate('/chat?voice=1')}
+                  sx={{
+                    cursor: 'pointer',
+                    overflow: 'hidden',
+                    background: 'radial-gradient(80% 120% at 20% 20%, rgba(59,130,246,0.15) 0%, rgba(118,75,162,0.12) 35%, rgba(2,6,23,0.1) 100%)',
+                    border: '1px solid rgba(102,126,234,0.35)',
+                    position: 'relative',
+                    minHeight: 260,
+                    transition: 'transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      boxShadow: '0 18px 40px rgba(102,126,234,0.25)',
+                      borderColor: 'rgba(102,126,234,0.6)'
+                    }
+                  }}
+                >
+                  <CardContent sx={{ p: 4 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, flexWrap: 'wrap' }}>
+                      {/* Left: Title and CTA */}
+                      <Box sx={{ minWidth: 320 }}>
+                        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1,
+                          background: 'linear-gradient(135deg, #93c5fd 0%, #a78bfa 50%, #f0abfc 100%)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text'
+                        }}>
+                          AI Assistant
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary" sx={{ mb: 2.5 }}>
+                          Voice-enabled chat assistant. Speak to start a conversation.
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          size="large"
+                          onClick={(e) => { e.stopPropagation(); navigate('/chat?voice=1'); }}
+                          startIcon={<MicIcon />}
+                          sx={{
+                            fontWeight: 800,
+                            px: 3,
+                            py: 1.25,
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            boxShadow: '0 14px 28px rgba(102,126,234,0.35)',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                              transform: 'translateY(-1px)'
+                            }
+                          }}
+                          >
+                          Try Now
+                        </Button>
+                      </Box>
+
+                      {/* Right: Animated sphere */}
+                      <Box sx={{ position: 'relative', width: 220, height: 220, mx: 'auto' }}>
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            inset: 0,
+                            borderRadius: '50%',
+                            background: 'radial-gradient(closest-side, rgba(147,197,253,0.25), rgba(167,139,250,0.25), rgba(240,171,252,0.15) 80%)',
+                            boxShadow: '0 0 28px rgba(147,197,253,0.4), inset 0 0 48px rgba(118,75,162,0.3)'
+                          }}
+                        />
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            inset: 0,
+                            borderRadius: '50%',
+                            background: 'conic-gradient(from 0deg, rgba(147,197,253,0.0), rgba(147,197,253,0.35), rgba(167,139,250,0.35), rgba(240,171,252,0.25), rgba(147,197,253,0.0))',
+                            filter: 'blur(4px)',
+                            animation: `${spin} 8s linear infinite`
+                          }}
+                        />
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            inset: 0,
+                            borderRadius: '50%',
+                            background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.05) 30%, transparent 60%)'
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+
               {quickLinks.map((link, index) => (
                 <Grid item xs={12} sm={6} key={index}>
                   <Card

@@ -23,6 +23,7 @@ import HttpsIcon from '@mui/icons-material/Https';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import RouterIcon from '@mui/icons-material/Router';
+import InfoIcon from '@mui/icons-material/Info';
 
 const drawerWidth = 280;
 
@@ -45,6 +46,7 @@ const menuItems: MenuItem[] = [
   { text: 'Certificates (HTTPS)', path: '/certificates', icon: <HttpsIcon /> },
   { text: 'Monitoring & Services', path: '/monitoring', icon: <MonitorHeartIcon /> },
   { text: 'Internal Chat Test', path: '/chat', icon: <ChatIcon /> },
+  { text: 'About', path: '/about', icon: <InfoIcon /> },
 ];
 
 const adminMenuItem: MenuItem = {
@@ -364,21 +366,10 @@ const Sidebar: React.FC = () => {
             display: 'block',
             textAlign: 'center',
             color: 'text.secondary',
-            mb: 0.25,
-          }}
-        >
-          v{(process.env as any)?.REACT_APP_VERSION || 'dev'}
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{
-            display: 'block',
-            textAlign: 'center',
-            color: 'text.secondary',
             mb: 0.5,
           }}
         >
-          © 2025 Muhammed Ali
+          v{(process.env as any)?.REACT_APP_VERSION || 'dev'}
         </Typography>
         <Box
           sx={{
@@ -400,11 +391,6 @@ const Sidebar: React.FC = () => {
           />
           <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 600 }}>
             System Online
-          </Typography>
-        </Box>
-        <Box sx={{ mt: 1, textAlign: 'center' }}>
-          <Typography variant="caption" color="text.secondary">
-            © 2025 Muhammed Ali
           </Typography>
         </Box>
       </Box>

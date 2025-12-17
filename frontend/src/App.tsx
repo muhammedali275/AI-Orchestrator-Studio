@@ -19,6 +19,7 @@ import ChatStudio from './pages/ChatStudio';
 import AgentsConfig from './pages/AgentsConfig';
 import CredentialsSecurity from './pages/CredentialsSecurity';
 import Certificates from './pages/Certificates';
+import About from './pages/About';
 import Sidebar from './components/Sidebar';
 
 const getTheme = (mode: 'light' | 'dark') => createTheme({
@@ -376,6 +377,7 @@ function App() {
               <Route path="/db" element={<DBManagement />} />
               <Route path="/upgrades" element={<Upgrades />} />
               <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/about" element={<About />} />
             </Routes>
           </main>
         </div>

@@ -28,6 +28,9 @@ import {
   Timeline as TimelineIcon,
   Build as BuildIcon,
   Speed as SpeedIcon,
+  Mic as MicIcon,
+  MicOff as MicOffIcon,
+  VolumeUp as VolumeUpIcon,
 } from '@mui/icons-material';
 import ConversationList from '../components/chat/ConversationList';
 import ChatMessage from '../components/chat/ChatMessage';
@@ -102,12 +105,44 @@ const ChatStudio: React.FC = () => {
   const [memoryLoading, setMemoryLoading] = useState(false);
   const [llmStatus, setLlmStatus] = useState<{ source?: string; server_url?: string; error?: string } | null>(null);
 
+  // Voice: TTS and STT
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>('');
+  const [listening, setListening] = useState<boolean>(false);
+  const recognitionRef = useRef<any>(null);
+  const lastTranscriptRef = useRef<string>('');
+  const SpeechRecognition: any = (typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) || null;
+
   // Load configuration and initial data on mount
   useEffect(() => {
     loadConfig(); // Load timeout and other config from backend
     loadConversations();
     loadModels();
     loadRoutingProfiles();
+  }, []);
+
+  // Load browser TTS voices and handle voice=1 auto-start
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const synth = window.speechSynthesis;
+    const load = () => {
+      const v = synth.getVoices();
+      if (v && v.length) {
+        setVoices(v);
+        if (!selectedVoiceUri) setSelectedVoiceUri(v[0].voiceURI);
+      }
+    };
+    load();
+    synth.onvoiceschanged = load;
+
+    // Auto-enable voice mode if query has voice=1
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get('voice') === '1') {
+        // Start listening after a tick to allow voices to populate
+        setTimeout(() => startListening(), 300);
+      }
+    } catch {}
   }, []);
 
   // Auto-scroll to bottom when messages change
@@ -234,6 +269,65 @@ const ChatStudio: React.FC = () => {
         }
       ];
       setRoutingProfiles(fallbackProfiles);
+    }
+  };
+
+  // Voice helpers
+  const speak = (text: string) => {
+    if (!text) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const synth = window.speechSynthesis;
+    const utter = new SpeechSynthesisUtterance(text);
+    const voice = voices.find(v => v.voiceURI === selectedVoiceUri) || voices[0];
+    if (voice) utter.voice = voice;
+    utter.rate = 1;
+    utter.pitch = 1;
+    synth.cancel();
+    synth.speak(utter);
+  };
+
+  const startListening = () => {
+    if (!SpeechRecognition) {
+      setError('Browser speech recognition not supported.');
+      return;
+    }
+    try {
+      const rec = new SpeechRecognition();
+      rec.lang = 'en-US';
+      rec.continuous = false;
+      rec.interimResults = true;
+      lastTranscriptRef.current = '';
+      rec.onresult = (e: any) => {
+        let t = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          t += e.results[i][0].transcript;
+        }
+        lastTranscriptRef.current = t;
+      };
+      rec.onerror = (e: any) => {
+        console.warn('SpeechRecognition error:', e);
+      };
+      rec.onend = () => {
+        setListening(false);
+        const finalText = (lastTranscriptRef.current || '').trim();
+        if (finalText) {
+          handleSendMessage(finalText);
+        }
+      };
+      recognitionRef.current = rec;
+      rec.start();
+      setListening(true);
+    } catch (e) {
+      console.error('Failed to start SpeechRecognition', e);
+      setError('Failed to start microphone.');
+    }
+  };
+
+  const stopListening = () => {
+    try {
+      recognitionRef.current?.stop?.();
+    } finally {
+      setListening(false);
     }
   };
 
@@ -403,6 +497,9 @@ const ChatStudio: React.FC = () => {
       } else {
         await loadConversations();
       }
+
+      // Speak the assistant response
+      speak(assistantContent);
     } catch (err: any) {
       console.error('Error streaming message:', err);
       const errorMsg = err.name === 'AbortError'
@@ -488,6 +585,36 @@ const ChatStudio: React.FC = () => {
 
           <Box sx={{ flex: 1 }} />
 
+          {/* Voice Controls */}
+          <FormControl size="small" sx={{ minWidth: 220 }} disabled={voices.length === 0}>
+            <InputLabel>Voice</InputLabel>
+            <Select
+              value={selectedVoiceUri}
+              label="Voice"
+              onChange={(e) => setSelectedVoiceUri(String(e.target.value))}
+            >
+              {voices.length === 0 ? (
+                <MenuItem value="" disabled>
+                  No voices available
+                </MenuItem>
+              ) : (
+                voices.map((v) => (
+                  <MenuItem key={v.voiceURI} value={v.voiceURI}>
+                    {v.name} {v.lang ? `(${v.lang})` : ''}
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </FormControl>
+
+          <Tooltip title={listening ? 'Stop voice input' : 'Start voice input'}>
+            <span>
+              <IconButton size="small" onClick={() => (listening ? stopListening() : startListening())} color={listening ? 'error' : 'primary'}>
+                {listening ? <MicOffIcon /> : <MicIcon />}
+              </IconButton>
+            </span>
+          </Tooltip>
+
           {/* LLM Connectivity Badge */}
           {llmStatus && (
             <Chip
@@ -503,16 +630,6 @@ const ChatStudio: React.FC = () => {
               sx={{ mr: 1 }}
             />
           )}
-
-          {/* Version + Copyright */}
-          <Box sx={{ textAlign: 'right', mr: 1 }}>
-            <Typography variant="caption" color="text.secondary">
-              v{APP_VERSION}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block">
-              © 2025 Muhammed Ali
-            </Typography>
-          </Box>
 
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel>Routing Profile</InputLabel>

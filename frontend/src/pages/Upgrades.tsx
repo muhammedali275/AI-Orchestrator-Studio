@@ -14,127 +14,394 @@ import {
   Grid,
   Card,
   CardContent,
-  LinearProgress
+  LinearProgress,
+  Tabs,
+  Tab,
+  IconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  TextField,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Badge
 } from '@mui/material';
 import {
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
   Info as InfoIcon,
   Update as UpdateIcon,
-  Done as DoneIcon
+  Done as DoneIcon,
+  Refresh as RefreshIcon,
+  CloudDownload as CloudDownloadIcon,
+  Code as CodeIcon,
+  Language as LanguageIcon,
+  Memory as MemoryIcon,
+  ExpandMore as ExpandMoreIcon,
+  Visibility as VisibilityIcon,
+  Search as SearchIcon,
+  FilterList as FilterListIcon
 } from '@mui/icons-material';
+import axios from 'axios';
 
-interface Dependency {
+interface ComponentVersion {
   name: string;
-  currentVersion: string;
-  latestVersion: string;
-  status: 'up-to-date' | 'update-available' | 'major-update' | 'updating';
-  type: 'backend' | 'frontend';
+  current_version: string;
+  latest_version?: string;
+  status: 'up-to-date' | 'update-available' | 'major-update' | 'unknown' | 'updating';
+  type: 'backend' | 'frontend' | 'ollama' | 'system';
+  update_command?: string;
+  changelog_url?: string;
+}
+
+interface UpgradeStatus {
+  component: string;
+  status: 'running' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  logs: string[];
 }
 
 const Upgrades: React.FC = () => {
-  const [dependencies, setDependencies] = useState<Dependency[]>([
-    { name: 'FastAPI', currentVersion: '0.104.1', latestVersion: '0.105.0', status: 'update-available', type: 'backend' },
-    { name: 'LangGraph', currentVersion: '0.0.40', latestVersion: '0.0.45', status: 'update-available', type: 'backend' },
-    { name: 'React', currentVersion: '18.2.0', latestVersion: '18.2.0', status: 'up-to-date', type: 'frontend' },
-    { name: 'Material UI', currentVersion: '5.14.5', latestVersion: '5.15.0', status: 'update-available', type: 'frontend' },
-    { name: 'Python', currentVersion: '3.10.12', latestVersion: '3.11.6', status: 'major-update', type: 'backend' }
-  ]);
-  
+  const [components, setComponents] = useState<{ [key: string]: ComponentVersion[] }>({
+    backend: [],
+    frontend: [],
+    ollama: [],
+    system: []
+  });
+  const [summary, setSummary] = useState({
+    total: 0,
+    up_to_date: 0,
+    updates_available: 0,
+    unknown: 0
+  });
   const [message, setMessage] = useState('');
-  const [updating, setUpdating] = useState(false);
-  const [updateProgress, setUpdateProgress] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [upgradeStatuses, setUpgradeStatuses] = useState<{ [key: string]: UpgradeStatus }>({});
+  const [logDialog, setLogDialog] = useState<{ open: boolean; component: string; logs: string[] }>({
+    open: false,
+    component: '',
+    logs: []
+  });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [connectivityStatus, setConnectivityStatus] = useState<any>(null);
 
   useEffect(() => {
-    // Simulate progress when updating
-    if (updating) {
-      const interval = setInterval(() => {
-        setUpdateProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setUpdating(false);
-            setMessage('All dependencies updated successfully!');
-            
-            // Update the dependencies to show they're up-to-date
-            setDependencies((deps) => {
-              return deps.map(dep => {
-                if (dep.status === 'updating') {
-                  return {
-                    ...dep,
-                    currentVersion: dep.latestVersion,
-                    status: 'up-to-date' as const
-                  };
-                }
-                return dep;
-              });
-            });
-            
-            return 0;
-          }
-          return prev + 10;
-        });
-      }, 500);
+    checkUpdates();
+  }, []);
+
+  const testConnectivity = async () => {
+    try {
+      const response = await axios.get('http://localhost:8000/api/upgrades/test-connectivity');
+      setConnectivityStatus(response.data);
       
-      return () => clearInterval(interval);
-    }
-  }, [updating]);
-
-  const handleUpdate = (index: number) => {
-    // Mark the dependency as updating
-    const newDependencies = [...dependencies];
-    newDependencies[index] = { ...newDependencies[index], status: 'updating' };
-    setDependencies(newDependencies);
-    
-    // Start the update process
-    setUpdating(true);
-    setUpdateProgress(0);
-    setMessage(`Updating ${newDependencies[index].name}...`);
-  };
-
-  const handleUpdateAll = () => {
-    // Mark all updatable dependencies as updating
-    const newDependencies = dependencies.map(dep => {
-      if (dep.status === 'update-available' || dep.status === 'major-update') {
-        return { ...dep, status: 'updating' as const };
+      const pypiOk = response.data.pypi?.status === 'connected';
+      const npmOk = response.data.npm?.status === 'connected';
+      
+      if (pypiOk && npmOk) {
+        setMessage('✓ Internet connectivity OK - Both PyPI and npm registries accessible');
+      } else if (pypiOk) {
+        setMessage('⚠ Partial connectivity - PyPI OK, npm registry failed');
+      } else if (npmOk) {
+        setMessage('⚠ Partial connectivity - npm OK, PyPI registry failed');
+      } else {
+        setMessage('✗ Internet connectivity issues - Cannot reach PyPI or npm registries');
       }
-      return dep;
-    });
-    setDependencies(newDependencies);
-    
-    // Start the update process
-    setUpdating(true);
-    setUpdateProgress(0);
-    setMessage('Updating all dependencies...');
+    } catch (error: any) {
+      setMessage(`Connectivity test failed: ${error.message}`);
+    }
   };
 
-  const getStatusChip = (status: 'up-to-date' | 'update-available' | 'major-update' | 'updating') => {
-    switch (status) {
+  const checkUpdates = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const response = await axios.get('http://localhost:8000/api/upgrades/check');
+      if (response.data.success) {
+        setComponents(response.data.components);
+        setSummary(response.data.summary);
+        setMessage(`✓ Update check completed - Found ${response.data.summary.total} components (${response.data.summary.updates_available} updates available)`);
+      }
+    } catch (error: any) {
+      console.error('Error checking updates:', error);
+      setMessage(`Error: ${error.response?.data?.detail || error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpgrade = async (component: ComponentVersion) => {
+    const statusKey = `${component.type}:${component.name}`;
+    try {
+      const response = await axios.post('http://localhost:8000/api/upgrades/upgrade', {
+        name: component.name,
+        type: component.type,
+        target_version: component.latest_version
+      });
+      
+      if (response.data.success) {
+        setMessage(`Upgrade started for ${component.name}`);
+        // Start polling for status
+        pollUpgradeStatus(statusKey);
+      }
+    } catch (error: any) {
+      setMessage(`Error: ${error.response?.data?.detail || error.message}`);
+    }
+  };
+
+  const pollUpgradeStatus = async (statusKey: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await axios.get(`http://localhost:8000/api/upgrades/status/${encodeURIComponent(statusKey)}`);
+        const status = response.data;
+        
+        setUpgradeStatuses(prev => ({ ...prev, [statusKey]: status }));
+        
+        if (status.status === 'completed' || status.status === 'failed') {
+          clearInterval(interval);
+          if (status.status === 'completed') {
+            setMessage(`Successfully upgraded ${status.component}`);
+            // Refresh component list
+            checkUpdates();
+          } else {
+            setMessage(`Failed to upgrade ${status.component}: ${status.message}`);
+          }
+        }
+      } catch (error) {
+        clearInterval(interval);
+      }
+    }, 2000);
+  };
+
+  const showLogs = (component: string, logs: string[]) => {
+    setLogDialog({ open: true, component, logs });
+  };
+
+  const getStatusChip = (component: ComponentVersion, statusKey: string) => {
+    const upgradeStatus = upgradeStatuses[statusKey];
+    
+    if (upgradeStatus?.status === 'running') {
+      return <Chip icon={<CircularProgress size={16} />} label={`${upgradeStatus.progress}%`} color="primary" size="small" />;
+    }
+    
+    switch (component.status) {
       case 'up-to-date':
         return <Chip icon={<CheckCircleIcon />} label="Up to date" color="success" size="small" />;
       case 'update-available':
         return <Chip icon={<InfoIcon />} label="Update available" color="info" size="small" />;
       case 'major-update':
         return <Chip icon={<WarningIcon />} label="Major update" color="warning" size="small" />;
-      case 'updating':
-        return <Chip icon={<CircularProgress size={16} />} label="Updating..." color="primary" size="small" />;
+      case 'unknown':
+        return <Chip label="Unknown" size="small" />;
       default:
         return null;
     }
   };
 
-  const updatesAvailable = dependencies.some(dep => 
-    dep.status === 'update-available' || dep.status === 'major-update'
-  );
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'backend':
+        return <CodeIcon />;
+      case 'frontend':
+        return <LanguageIcon />;
+      case 'ollama':
+        return <MemoryIcon />;
+      case 'system':
+        return <CloudDownloadIcon />;
+      default:
+        return <InfoIcon />;
+    }
+  };
+
+  const renderComponentList = (type: string, items: ComponentVersion[]) => {
+    // Apply filters
+    let filteredItems = items.filter(component => {
+      const matchesSearch = component.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || component.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    if (filteredItems.length === 0) {
+      return (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          {items.length === 0 
+            ? `No ${type} components found` 
+            : 'No components match the current filters'}
+        </Alert>
+      );
+    }
+
+    return (
+      <List>
+        {filteredItems.map((component, index) => {
+          const statusKey = `${component.type}:${component.name}`;
+          const upgradeStatus = upgradeStatuses[statusKey];
+          
+          return (
+            <ListItem key={index} divider>
+              <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+                {getTypeIcon(component.type)}
+              </Box>
+              <ListItemText 
+                primary={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                      {component.name}
+                    </Typography>
+                    {component.changelog_url && (
+                      <Tooltip title="View changelog">
+                        <IconButton
+                          size="small"
+                          onClick={() => window.open(component.changelog_url, '_blank')}
+                        >
+                          <InfoIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
+                }
+                secondary={
+                  <Box>
+                    <Typography variant="caption" display="block">
+                      Current: {component.current_version}
+                      {component.latest_version && ` → Latest: ${component.latest_version}`}
+                    </Typography>
+                    {component.update_command && (
+                      <Typography variant="caption" display="block" sx={{ fontFamily: 'monospace', color: 'text.secondary', mt: 0.5 }}>
+                        {component.update_command}
+                      </Typography>
+                    )}
+                    {upgradeStatus?.message && (
+                      <Typography variant="caption" display="block" color="primary" sx={{ mt: 0.5 }}>
+                        {upgradeStatus.message}
+                      </Typography>
+                    )}
+                  </Box>
+                }
+              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {getStatusChip(component, statusKey)}
+                {upgradeStatus?.logs && upgradeStatus.logs.length > 0 && (
+                  <Tooltip title="View logs">
+                    <IconButton
+                      size="small"
+                      onClick={() => showLogs(component.name, upgradeStatus.logs)}
+                    >
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {component.status !== 'up-to-date' && component.status !== 'unknown' && (
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    disabled={upgradeStatus?.status === 'running'}
+                    onClick={() => handleUpgrade(component)}
+                    startIcon={<UpdateIcon />}
+                  >
+                    {upgradeStatus?.status === 'running' ? 'Updating...' : 'Update'}
+                  </Button>
+                )}
+              </Box>
+            </ListItem>
+          );
+        })}
+      </List>
+    );
+  };
 
   return (
-    <div>
-      <Typography variant="h4" gutterBottom>
-        Upgrades & Dependencies
-      </Typography>
+    <Box className="fade-in">
+      {/* Header */}
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              mb: 1,
+            }}
+          >
+            Upgrades & Dependencies
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Manage updates for backend packages, frontend dependencies, Ollama models, and system components
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Tooltip title="Test internet connectivity to PyPI and npm">
+            <Button
+              variant="outlined"
+              onClick={testConnectivity}
+              disabled={loading}
+              startIcon={<CloudDownloadIcon />}
+              size="small"
+            >
+              Test Connectivity
+            </Button>
+          </Tooltip>
+          <Tooltip title="Check for updates">
+            <IconButton
+              onClick={checkUpdates}
+              disabled={loading}
+              sx={{
+                background: 'rgba(102, 126, 234, 0.1)',
+                '&:hover': { background: 'rgba(102, 126, 234, 0.2)' },
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Box>
       
+      {/* Connectivity Status */}
+      {connectivityStatus && (
+        <Alert 
+          severity={
+            connectivityStatus.pypi?.status === 'connected' && connectivityStatus.npm?.status === 'connected' 
+              ? 'success' 
+              : connectivityStatus.pypi?.status === 'connected' || connectivityStatus.npm?.status === 'connected'
+              ? 'warning'
+              : 'error'
+          } 
+          sx={{ mb: 2 }}
+          onClose={() => setConnectivityStatus(null)}
+        >
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Internet Connectivity Test Results:</Typography>
+            <Typography variant="caption" display="block">
+              PyPI (Python): {connectivityStatus.pypi?.status === 'connected' 
+                ? `✓ Connected (${connectivityStatus.pypi?.latency_ms}ms)` 
+                : `✗ Failed - ${connectivityStatus.pypi?.error}`}
+            </Typography>
+            <Typography variant="caption" display="block">
+              npm Registry: {connectivityStatus.npm?.status === 'connected' 
+                ? `✓ Connected (${connectivityStatus.npm?.latency_ms}ms)` 
+                : `✗ Failed - ${connectivityStatus.npm?.error}`}
+            </Typography>
+          </Box>
+        </Alert>
+      )}
+      
+      {/* Messages */}
       {message && (
         <Alert 
-          severity={message.includes('successfully') ? 'success' : 'info'} 
+          severity={message.includes('Error') ? 'error' : message.includes('successfully') || message.includes('completed') ? 'success' : 'info'} 
           sx={{ mb: 3 }}
           onClose={() => setMessage('')}
         >
@@ -142,126 +409,233 @@ const Upgrades: React.FC = () => {
         </Alert>
       )}
       
-      {updating && (
+      {/* Loading */}
+      {loading && (
         <Box sx={{ mb: 3 }}>
-          <LinearProgress variant="determinate" value={updateProgress} />
+          <LinearProgress />
           <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
-            Updating dependencies... {updateProgress}%
+            Checking for updates...
           </Typography>
         </Box>
       )}
       
+      {/* Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Summary
-              </Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Typography>Total Dependencies:</Typography>
-                <Typography>{dependencies.length}</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Typography>Up to Date:</Typography>
-                <Typography>{dependencies.filter(d => d.status === 'up-to-date').length}</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Typography>Updates Available:</Typography>
-                <Typography>{dependencies.filter(d => d.status === 'update-available' || d.status === 'major-update').length}</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography>Currently Updating:</Typography>
-                <Typography>{dependencies.filter(d => d.status === 'updating').length}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <InfoIcon sx={{ fontSize: 40, color: '#667eea' }} />
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#667eea' }}>
+                    {summary.total}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Total Components
+                  </Typography>
+                </Box>
               </Box>
             </CardContent>
           </Card>
         </Grid>
-        
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Actions
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Button 
-                  variant="contained" 
-                  color="primary" 
-                  startIcon={<UpdateIcon />}
-                  onClick={handleUpdateAll}
-                  disabled={!updatesAvailable || updating}
-                  sx={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  }}
-                >
-                  Update All Dependencies
-                </Button>
-                <Button 
-                  variant="outlined" 
-                  startIcon={<DoneIcon />}
-                  disabled={updating}
-                >
-                  Check for Updates
-                </Button>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <CheckCircleIcon sx={{ fontSize: 40, color: '#10b981' }} />
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#10b981' }}>
+                    {summary.up_to_date}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Up to Date
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <WarningIcon sx={{ fontSize: 40, color: '#f59e0b' }} />
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#f59e0b' }}>
+                    {summary.updates_available}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Updates Available
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <InfoIcon sx={{ fontSize: 40, color: '#6b7280' }} />
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#6b7280' }}>
+                    {summary.unknown}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Unknown Status
+                  </Typography>
+                </Box>
               </Box>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
       
-      <Paper sx={{ p: 2 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Backend Dependencies
-        </Typography>
-        <List>
-          {dependencies.filter(dep => dep.type === 'backend').map((dep, index) => (
-            <ListItem key={dep.name} divider>
-              <ListItemText 
-                primary={`${dep.name} ${dep.currentVersion} → ${dep.latestVersion}`} 
-                secondary={`Current: ${dep.currentVersion} | Latest: ${dep.latestVersion}`}
-              />
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                {getStatusChip(dep.status)}
-                <Button 
-                  variant="outlined" 
-                  disabled={dep.status === 'up-to-date' || dep.status === 'updating' || updating}
-                  onClick={() => handleUpdate(dependencies.indexOf(dep))}
-                >
-                  {dep.status === 'updating' ? 'Updating...' : 'Update'}
-                </Button>
-              </Box>
-            </ListItem>
-          ))}
-        </List>
+      {/* Component Tabs */}
+      <Paper sx={{ mb: 3 }}>
+        {/* Filters */}
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <TextField
+            placeholder="Search components..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            size="small"
+            sx={{ flexGrow: 1, minWidth: 200 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <InputLabel>Filter by Status</InputLabel>
+            <Select
+              value={statusFilter}
+              label="Filter by Status"
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <MenuItem value="all">All Status</MenuItem>
+              <MenuItem value="up-to-date">Up to date</MenuItem>
+              <MenuItem value="update-available">Update available</MenuItem>
+              <MenuItem value="major-update">Major update</MenuItem>
+              <MenuItem value="unknown">Unknown</MenuItem>
+            </Select>
+          </FormControl>
+          <Tooltip title="Clear filters">
+            <Button 
+              variant="outlined" 
+              size="small"
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('all');
+              }}
+            >
+              Clear
+            </Button>
+          </Tooltip>
+        </Box>
         
-        <Divider sx={{ my: 3 }} />
+        <Tabs 
+          value={activeTab} 
+          onChange={(e, newValue) => setActiveTab(newValue)}
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab 
+            icon={<CodeIcon />} 
+            label={
+              <Badge 
+                badgeContent={components.backend?.filter(c => c.status === 'update-available' || c.status === 'major-update').length || 0} 
+                color="warning"
+              >
+                <span>Backend ({components.backend?.length || 0})</span>
+              </Badge>
+            } 
+            iconPosition="start"
+          />
+          <Tab 
+            icon={<LanguageIcon />} 
+            label={
+              <Badge 
+                badgeContent={components.frontend?.filter(c => c.status === 'update-available' || c.status === 'major-update').length || 0} 
+                color="warning"
+              >
+                <span>Frontend ({components.frontend?.length || 0})</span>
+              </Badge>
+            } 
+            iconPosition="start"
+          />
+          <Tab 
+            icon={<MemoryIcon />} 
+            label={
+              <Badge 
+                badgeContent={components.ollama?.filter(c => c.status === 'update-available' || c.status === 'major-update').length || 0} 
+                color="warning"
+              >
+                <span>Ollama Models ({components.ollama?.length || 0})</span>
+              </Badge>
+            } 
+            iconPosition="start"
+          />
+          <Tab 
+            icon={<CloudDownloadIcon />} 
+            label={
+              <Badge 
+                badgeContent={components.system?.filter(c => c.status === 'update-available' || c.status === 'major-update').length || 0} 
+                color="warning"
+              >
+                <span>System ({components.system?.length || 0})</span>
+              </Badge>
+            } 
+            iconPosition="start"
+          />
+        </Tabs>
         
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Frontend Dependencies
-        </Typography>
-        <List>
-          {dependencies.filter(dep => dep.type === 'frontend').map((dep, index) => (
-            <ListItem key={dep.name} divider>
-              <ListItemText 
-                primary={`${dep.name} ${dep.currentVersion} → ${dep.latestVersion}`} 
-                secondary={`Current: ${dep.currentVersion} | Latest: ${dep.latestVersion}`}
-              />
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                {getStatusChip(dep.status)}
-                <Button 
-                  variant="outlined" 
-                  disabled={dep.status === 'up-to-date' || dep.status === 'updating' || updating}
-                  onClick={() => handleUpdate(dependencies.indexOf(dep))}
-                >
-                  {dep.status === 'updating' ? 'Updating...' : 'Update'}
-                </Button>
-              </Box>
-            </ListItem>
-          ))}
-        </List>
+        <Box sx={{ p: 2 }}>
+          {activeTab === 0 && renderComponentList('backend', components.backend || [])}
+          {activeTab === 1 && renderComponentList('frontend', components.frontend || [])}
+          {activeTab === 2 && renderComponentList('ollama', components.ollama || [])}
+          {activeTab === 3 && renderComponentList('system', components.system || [])}
+        </Box>
       </Paper>
-    </div>
+
+      {/* Logs Dialog */}
+      <Dialog
+        open={logDialog.open}
+        onClose={() => setLogDialog({ open: false, component: '', logs: [] })}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Upgrade Logs: {logDialog.component}
+        </DialogTitle>
+        <DialogContent>
+          <Paper
+            sx={{
+              p: 2,
+              bgcolor: '#1e1e1e',
+              color: '#d4d4d4',
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+              maxHeight: '400px',
+              overflow: 'auto'
+            }}
+          >
+            {logDialog.logs.map((log, index) => (
+              <Box key={index} sx={{ mb: 1, whiteSpace: 'pre-wrap' }}>
+                {log}
+              </Box>
+            ))}
+          </Paper>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLogDialog({ open: false, component: '', logs: [] })}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };
 

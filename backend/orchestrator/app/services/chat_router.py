@@ -7,6 +7,7 @@ Routes chat requests to appropriate backends based on routing profile.
 import logging
 import time
 from typing import Dict, Any, List, Optional, AsyncGenerator
+import types
 from datetime import datetime
 
 from ..config import Settings
@@ -40,6 +41,42 @@ class ChatRouter:
         self.settings = settings
         self.llm_client = LLMClient(settings)
         self.conversation_memory = ConversationMemory(settings)
+
+    def _select_connection_for_model(self, model_id: Optional[str]) -> Dict[str, Any]:
+        """Select base_url/api_key based on model provider and configured connections."""
+        try:
+            from ..api.model_standardization import ModelParser, ModelProvider
+            provider = None
+            if model_id:
+                provider = ModelParser.parse(model_id).provider
+            # Prefer GUI-configured connections
+            for _, cfg in (getattr(self.settings, 'llm_connections', {}) or {}).items():
+                base = getattr(cfg, 'base_url', None) or ''
+                bl = base.lower()
+                if provider == ModelProvider.OLLAMA and ("11434" in bl or "ollama" in bl):
+                    return {"base_url": base, "api_key": getattr(cfg, 'api_key', None)}
+                if provider == ModelProvider.OPENAI and ("openai" in bl or "/v1" in bl):
+                    return {"base_url": base, "api_key": getattr(cfg, 'api_key', None)}
+            # Fallback to single configured server
+            if getattr(self.settings, 'llm_base_url', None):
+                return {"base_url": self.settings.llm_base_url, "api_key": getattr(self.settings, 'llm_api_key', None)}
+        except Exception:
+            pass
+        # Last resort local Ollama
+        return {"base_url": "http://localhost:11434", "api_key": None}
+
+    def _make_temp_settings(self, base_url: str, api_key: Optional[str]):
+        """Create a minimal settings-like object for LLMClient with overridden connection."""
+        ns = types.SimpleNamespace(
+            llm_base_url=base_url,
+            llm_default_model=self.settings.llm_default_model,
+            llm_timeout_seconds=self.settings.llm_timeout_seconds,
+            llm_max_retries=self.settings.llm_max_retries,
+            llm_api_key=api_key,
+            llm_temperature=self.settings.llm_temperature,
+            llm_max_tokens=self.settings.llm_max_tokens
+        )
+        return ns
     
     async def route_message(
         self,
@@ -181,9 +218,13 @@ class ChatRouter:
             # Only direct_llm supports streaming currently
             if routing_profile == "direct_llm":
                 full_response = ""
-                async for chunk in self.llm_client.stream(messages=messages, model=model_id):
+                sel = self._select_connection_for_model(model_id)
+                tmp_settings = self._make_temp_settings(sel["base_url"], sel.get("api_key"))
+                client = LLMClient(tmp_settings)
+                async for chunk in client.stream(messages=messages, model=model_id):
                     full_response += chunk
                     yield chunk
+                await client.close()
                 
                 # Store in memory after streaming completes
                 if use_memory and user_id:
@@ -259,7 +300,13 @@ class ChatRouter:
         """Route directly to LLM."""
         logger.info("[ChatRouter] Routing to direct LLM")
         
-        result = await self.llm_client.call(messages=messages, model=model_id)
+        sel = self._select_connection_for_model(model_id)
+        tmp_settings = self._make_temp_settings(sel["base_url"], sel.get("api_key"))
+        client = LLMClient(tmp_settings)
+        try:
+            result = await client.call(messages=messages, model=model_id)
+        finally:
+            await client.close()
         
         # Extract response - handle both Ollama and OpenAI formats
         response_data = result.get("response", {})

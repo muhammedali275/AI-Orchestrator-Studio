@@ -55,6 +55,195 @@ class DataSourceConfig(BaseModel):
     config: Dict[str, Any] = {}
 
 
+class LLMConnection(BaseModel):
+    """Model for LLM connection persisted by GUI."""
+    id: str
+    name: str
+    base_url: str
+    model: Optional[str] = None
+    api_key: Optional[str] = None
+    timeout: int = 60
+    max_tokens: Optional[int] = None
+    temperature: float = 0.7
+    is_local: bool = False
+
+
+@router.post("/llm-connections/{conn_id}/test")
+async def test_llm_connection(conn_id: str, settings: Settings = Depends(get_settings)) -> Dict[str, Any]:
+    """Test reachability of a specific LLM connection by ID.
+
+    Tries provider-specific probes:
+    - Ollama: GET /api/tags
+    - OpenAI-compatible: GET /v1/models then fallback to /models
+
+    Returns connectivity, latency, status code and a short message.
+    """
+    try:
+        # Resolve connection info by merging file + in-memory settings
+        target: Optional[LLMConnection] = None
+        try:
+            # First, check settings.llm_connections
+            if conn_id in settings.llm_connections:
+                cfg = settings.llm_connections[conn_id]
+                target = LLMConnection(**cfg.dict())
+        except Exception:
+            pass
+
+        if target is None:
+            # Try to read from config file
+            from pathlib import Path
+            import json as _json
+            path = Path("config/llm_connections.json")
+            if path.exists():
+                try:
+                    with open(path, 'r') as f:
+                        data = _json.load(f) or {}
+                        for c in data.get("connections", []):
+                            if c.get("id") == conn_id:
+                                try:
+                                    target = LLMConnection(**c)
+                                    break
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+
+        if target is None and conn_id == "default":
+            # Bridge to single-config .env defaults
+            target = LLMConnection(
+                id="default",
+                name="Default LLM",
+                base_url=settings.llm_base_url or "",
+                model=settings.llm_default_model or "",
+                api_key=settings.llm_api_key or None,
+                timeout=settings.llm_timeout_seconds or 60,
+                max_tokens=settings.llm_max_tokens,
+                temperature=settings.llm_temperature,
+                is_local=(settings.llm_base_url or "").find("localhost") != -1 or (settings.llm_base_url or "").find("127.0.0.1") != -1 or (settings.llm_base_url or "").find("11434") != -1,
+            )
+
+        if target is None or not target.base_url:
+            raise HTTPException(status_code=404, detail=f"LLM connection '{conn_id}' not found or base_url missing")
+
+        base_url = target.base_url.rstrip('/')
+        headers = {"Content-Type": "application/json"}
+        if target.api_key:
+            headers["Authorization"] = f"Bearer {target.api_key}"
+
+        def detect_provider(url: str) -> str:
+            u = (url or "").lower()
+            if "ollama" in u or "11434" in u:
+                return "ollama"
+            if "openai" in u or "/v1" in u:
+                return "openai"
+            return "unknown"
+
+        provider = detect_provider(base_url)
+
+        import time as _time
+        import httpx as _httpx
+        start = _time.time()
+        status_code = None
+        models_sample: List[str] = []
+        msg = ""
+
+        async with _httpx.AsyncClient(timeout=target.timeout or 10, headers=headers) as client:
+            # Try provider-specific endpoints
+            try:
+                if provider == "ollama":
+                    # 1) Preferred: /api/tags
+                    try:
+                        resp = await client.get(f"{base_url}/api/tags")
+                        status_code = resp.status_code
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            models = data.get("models", [])
+                            models_sample = [m.get("name") for m in models if m.get("name")][:3]
+                            msg = "Ollama reachable"
+                        else:
+                            msg = f"Ollama /api/tags HTTP {resp.status_code}"
+                    except Exception as e1:
+                        # 2) Fallback: GET /
+                        try:
+                            resp = await client.get(f"{base_url}/")
+                            status_code = resp.status_code
+                            text = resp.text or ""
+                            if resp.status_code == 200 and "Ollama is running" in text:
+                                msg = "Ollama root reachable"
+                            else:
+                                msg = f"Ollama root HTTP {resp.status_code}"
+                        except Exception as e2:
+                            # 3) If localhost, try 127.0.0.1 swap
+                            if "localhost" in base_url:
+                                host_swapped = base_url.replace("localhost", "127.0.0.1")
+                                try:
+                                    resp = await client.get(f"{host_swapped}/api/tags")
+                                    status_code = resp.status_code
+                                    if resp.status_code == 200:
+                                        data = resp.json()
+                                        models = data.get("models", [])
+                                        models_sample = [m.get("name") for m in models if m.get("name")][:3]
+                                        msg = "Ollama reachable via 127.0.0.1"
+                                        base_url = host_swapped
+                                    else:
+                                        msg = f"Ollama HTTP {resp.status_code} via 127.0.0.1"
+                                except Exception as e3:
+                                    msg = f"Probe error (ollama): {e1}; fallback: {e2}; swap: {e3}"
+                else:
+                    # OpenAI-compatible first
+                    resp = await client.get(f"{base_url}/v1/models")
+                    status_code = resp.status_code
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        items = data.get("data", []) if isinstance(data, dict) else []
+                        for m in items:
+                            mid = m.get("id") or m.get("name")
+                            if mid:
+                                models_sample.append(mid)
+                        models_sample = models_sample[:3]
+                        msg = "OpenAI-compatible reachable"
+                    else:
+                        # Fallback to /models
+                        try:
+                            resp2 = await client.get(f"{base_url}/models")
+                            status_code = resp2.status_code
+                            if resp2.status_code == 200:
+                                data = resp2.json()
+                                items = data.get("data", []) if isinstance(data, dict) else []
+                                for m in items:
+                                    mid = m.get("id") or m.get("name")
+                                    if mid:
+                                        models_sample.append(mid)
+                                models_sample = models_sample[:3]
+                                msg = "Models endpoint reachable"
+                            else:
+                                msg = f"Models endpoint HTTP {resp2.status_code}"
+                        except Exception as e2:
+                            msg = f"Probe error (openai): HTTP {status_code}; fallback: {e2}"
+            except Exception as e:
+                msg = f"Probe error: {str(e)}"
+
+        latency_ms = (_time.time() - start) * 1000.0
+        connected = status_code == 200
+
+        return {
+            "id": target.id,
+            "name": target.name,
+            "base_url": base_url,
+            "provider": provider,
+            "connected": connected,
+            "status_code": status_code,
+            "latency_ms": latency_ms,
+            "message": msg,
+            "models_sample": models_sample,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing llm connection {conn_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/env")
 async def update_env_config(
     config: EnvConfigUpdate,
@@ -251,6 +440,71 @@ async def get_tools_config(
         
     except Exception as e:
         logger.error(f"Error reading tools config: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/llm-connections")
+async def get_llm_connections(settings: Settings = Depends(get_settings)) -> Dict[str, Any]:
+    """Get LLM connections from file plus default single-LLM fallback."""
+    try:
+        # Read from default path relative to backend working dir
+        from pathlib import Path
+        import json as _json
+        path = Path("config/llm_connections.json")
+        file_conns = []
+        if path.exists():
+            try:
+                with open(path, 'r') as f:
+                    file_conns = (_json.load(f) or {}).get("connections", [])
+            except Exception:
+                file_conns = []
+
+        # Merge with settings.llm_connections (already loaded & includes default if set)
+        merged: Dict[str, LLMConnection] = {}
+        for c in file_conns:
+            try:
+                conn = LLMConnection(**c)
+                merged[conn.id] = conn
+            except Exception:
+                continue
+        for cid, cfg in settings.llm_connections.items():
+            try:
+                conn = LLMConnection(**cfg.dict())
+                merged[cid] = conn
+            except Exception:
+                pass
+
+        return {"connections": [c.dict() for c in merged.values()]}
+    except Exception as e:
+        logger.error(f"Error reading llm connections: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/llm-connections/{conn_id}")
+async def delete_llm_connection(conn_id: str) -> Dict[str, Any]:
+    """Delete an LLM connection from llm_connections.json (no-op for default)."""
+    try:
+        from pathlib import Path
+        import json as _json
+        path = Path("config/llm_connections.json")
+        cfg = {"connections": []}
+        if path.exists():
+            with open(path, 'r') as f:
+                try:
+                    cfg = _json.load(f) or cfg
+                except Exception:
+                    pass
+        before = len(cfg.get("connections", []))
+        cfg["connections"] = [c for c in cfg.get("connections", []) if c.get("id") != conn_id]
+        after = len(cfg.get("connections", []))
+        # Persist back
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, 'w') as f:
+            _json.dump(cfg, f, indent=2)
+        clear_settings_cache()
+        return {"success": True, "removed": before - after}
+    except Exception as e:
+        logger.error(f"Error deleting llm connection: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

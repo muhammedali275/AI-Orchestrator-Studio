@@ -10,6 +10,36 @@
       content="AI Orchestrator Studio - GUI Control Plane"
     />
     <title>AI Orchestrator Studio</title>
+    <script>
+      // Suppress Chrome extension errors globally (before React loads)
+      window.addEventListener('error', function(event) {
+        const message = event.message || '';
+        const filename = event.filename || '';
+        
+        if (
+          filename.includes('chrome-extension://') ||
+          message.includes('MetaMask') ||
+          message.includes('Failed to connect')
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return true;
+        }
+      }, true);
+      
+      window.addEventListener('unhandledrejection', function(event) {
+        const message = event.reason?.message || event.reason?.toString() || '';
+        
+        if (
+          message.includes('chrome-extension://') ||
+          message.includes('MetaMask') ||
+          message.includes('Failed to connect')
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }, true);
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

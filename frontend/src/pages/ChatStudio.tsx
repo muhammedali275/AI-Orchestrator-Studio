@@ -30,13 +30,11 @@ import {
   Speed as SpeedIcon,
   Mic as MicIcon,
   MicOff as MicOffIcon,
-  VolumeUp as VolumeUpIcon,
+  ViewSidebar as ViewSidebarIcon,
 } from '@mui/icons-material';
 import ConversationList from '../components/chat/ConversationList';
 import ChatMessage from '../components/chat/ChatMessage';
 import ChatInput from '../components/chat/ChatInput';
-// App version sourced from env (set at build/start). Fallback to 'dev'.
-const APP_VERSION = (process.env as any)?.REACT_APP_VERSION || 'dev';
 
 interface Message {
   id: string;
@@ -104,6 +102,12 @@ const ChatStudio: React.FC = () => {
   const [memoryInfo, setMemoryInfo] = useState<any | null>(null);
   const [memoryLoading, setMemoryLoading] = useState(false);
   const [llmStatus, setLlmStatus] = useState<{ source?: string; server_url?: string; error?: string } | null>(null);
+  const [showConversations, setShowConversations] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem('chat.showConversations');
+      return v === null ? true : v === '1';
+    } catch { return true; }
+  });
 
   // Voice: TTS and STT
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -331,6 +335,14 @@ const ChatStudio: React.FC = () => {
     }
   };
 
+  const toggleConversations = () => {
+    setShowConversations(prev => {
+      const next = !prev;
+      try { localStorage.setItem('chat.showConversations', next ? '1' : '0'); } catch {}
+      return next;
+    });
+  };
+
   const loadConversationMessages = async (conversationId: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/chat/ui/conversations/${conversationId}`);
@@ -514,32 +526,34 @@ const ChatStudio: React.FC = () => {
   return (
     <Box sx={{ display: 'flex', height: 'calc(100vh - 48px)', gap: 2 }}>
       {/* Left Panel - Conversations */}
-      <Paper
-        sx={{
-          width: 300,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        <Box sx={{ p: 2, borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}` }}>
-          <Button
-            fullWidth
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleNewConversation}
-          >
-            New Chat
-          </Button>
-        </Box>
-        <ConversationList
-          conversations={conversations}
-          selectedConversation={selectedConversation}
-          onSelect={handleConversationSelect}
-          onDelete={handleDeleteConversation}
-          onRefresh={loadConversations}
-        />
-      </Paper>
+      {showConversations && (
+        <Paper
+          sx={{
+            width: 300,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          <Box sx={{ p: 2, borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}` }}>
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleNewConversation}
+            >
+              New Chat
+            </Button>
+          </Box>
+          <ConversationList
+            conversations={conversations}
+            selectedConversation={selectedConversation}
+            onSelect={handleConversationSelect}
+            onDelete={handleDeleteConversation}
+            onRefresh={loadConversations}
+          />
+        </Paper>
+      )}
 
       {/* Main Panel - Chat */}
       <Paper sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -582,6 +596,12 @@ const ChatStudio: React.FC = () => {
           <IconButton size="small" title="Settings">
             <SettingsIcon />
           </IconButton>
+
+          <Tooltip title={showConversations ? 'Hide conversations' : 'Show conversations'}>
+            <IconButton size="small" onClick={toggleConversations}>
+              <ViewSidebarIcon />
+            </IconButton>
+          </Tooltip>
 
           <Box sx={{ flex: 1 }} />
 

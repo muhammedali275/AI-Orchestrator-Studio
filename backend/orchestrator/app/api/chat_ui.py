@@ -539,15 +539,47 @@ async def list_models(
         
         logger.info(f"[Chat UI] Fetching models from LLM server: {settings.llm_base_url}")
         
-        # Check if LLM is configured
+        # Check if LLM is configured; if not, try local Ollama fallback first
         if not settings.llm_base_url:
-            logger.warning("[Chat UI] LLM base URL not configured")
+            logger.warning("[Chat UI] LLM base URL not configured; attempting local Ollama fallback")
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    local_url = "http://localhost:11434/api/tags"
+                    logger.info(f"[Chat UI] Trying local Ollama at: {local_url}")
+                    local_resp = await client.get(local_url)
+                    if local_resp.status_code == 200:
+                        data = local_resp.json()
+                        models = data.get("models", [])
+                        formatted_models = []
+                        for m in models:
+                            raw_name = m.get("name", m.get("model", "unknown"))
+                            std = ModelParser.parse(f"{ModelProvider.OLLAMA.value}:{raw_name}")
+                            formatted_models.append({
+                                "id": std.full_id,
+                                "name": std.short_id,
+                                "provider": std.provider.value,
+                                "size": m.get("size", 0),
+                                "modified_at": m.get("modified_at", "")
+                            })
+                        if formatted_models:
+                            logger.info(f"[Chat UI] Loaded {len(formatted_models)} model(s) from local Ollama")
+                            return {
+                                "success": True,
+                                "models": formatted_models,
+                                "default_model": formatted_models[0]["id"],
+                                "source": "ollama-local",
+                                "server_url": "http://localhost:11434",
+                                "message": f"Loaded {len(formatted_models)} model(s) from local Ollama"
+                            }
+            except Exception as le:
+                logger.info(f"[Chat UI] Local Ollama not detected: {le}")
+
             return {
                 "success": False,
                 "models": [],
                 "default_model": None,
                 "error": "not_configured",
-                "message": "LLM server not configured. Please configure an LLM connection in Settings > LLM Configuration.",
+                "message": "LLM server not configured. You can configure a server in Settings, or install and start Ollama locally to auto-detect models.",
                 "config_url": "/llm-config"
             }
         

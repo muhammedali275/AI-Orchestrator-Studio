@@ -8,7 +8,7 @@ NO hard-coded IPs, ports, URLs, or credentials.
 import json
 import logging
 from functools import lru_cache
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -99,6 +99,22 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(default=0.7, description="Default temperature for LLM")
     llm_max_tokens: Optional[int] = Field(default=None, description="Maximum tokens for LLM response")
     llm_api_key: Optional[str] = Field(default=None, description="LLM API key")
+    # Multiple LLM connections (GUI-driven)
+    class LLMConnectionConfig(BaseModel):
+        id: str = Field(..., description="Connection identifier")
+        name: str = Field(..., description="Display name")
+        base_url: str = Field(..., description="Server base URL (scheme://host:port)")
+        model: Optional[str] = Field(default=None, description="Preferred/default model for this connection")
+        api_key: Optional[str] = Field(default=None, description="API token if required")
+        timeout: int = Field(default=60, description="Timeout seconds")
+        max_tokens: Optional[int] = Field(default=None, description="Max tokens")
+        temperature: float = Field(default=0.7, description="Temperature")
+        is_local: bool = Field(default=False, description="Local server hint")
+
+    llm_connections: Dict[str, LLMConnectionConfig] = Field(
+        default_factory=dict,
+        description="Dictionary of GUI-configured LLM connections"
+    )
     
     # External Agent Configuration
     external_agent_base_url: Optional[str] = Field(default=None, description="External agent base URL (e.g., zain_agent)")
@@ -576,6 +592,42 @@ def get_settings() -> Settings:
         )
         settings.datasources["default"] = default_datasource
     
+    # Load LLM connections from default file if present
+    try:
+        from pathlib import Path
+        llm_conn_file = Path("config/llm_connections.json")
+        if llm_conn_file.exists():
+            with open(llm_conn_file, 'r') as f:
+                data = json.load(f)
+                conns: List[dict] = data.get("connections", [])
+                for c in conns:
+                    try:
+                        # Build config object and store by id
+                        cfg = Settings.LLMConnectionConfig(**c)
+                        settings.llm_connections[cfg.id] = cfg
+                    except Exception as e:
+                        logger.warning(f"Invalid LLM connection entry skipped: {e}")
+    except Exception as e:
+        logger.warning(f"Failed loading llm_connections.json: {e}")
+
+    # Backward compatibility: if single llm_base_url is set, ensure a default connection exists
+    if settings.llm_base_url and "default" not in settings.llm_connections:
+        try:
+            cfg = Settings.LLMConnectionConfig(
+                id="default",
+                name="Default LLM",
+                base_url=settings.llm_base_url,
+                model=settings.llm_default_model,
+                api_key=settings.llm_api_key,
+                timeout=settings.llm_timeout_seconds,
+                max_tokens=settings.llm_max_tokens,
+                temperature=settings.llm_temperature,
+                is_local=("localhost" in settings.llm_base_url) or ("127.0.0.1" in settings.llm_base_url) or ("11434" in settings.llm_base_url)
+            )
+            settings.llm_connections[cfg.id] = cfg
+        except Exception:
+            pass
+
     return settings
 
 

@@ -126,15 +126,28 @@ const AgentsConfig: React.FC = () => {
 
   const fetchLLMConnections = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/llm/config');
-      // Mock data if API doesn't return list
+      const response = await axios.get('http://localhost:8000/api/config/llm-connections');
+      const conns = (response.data?.connections || []).map((c: any) => ({ id: c.id, name: c.name || c.id }));
+      if (conns.length > 0) {
+        setLlmConnections(conns);
+      } else {
+        // Fallback: derive from single-config if present
+        const single = await axios.get('http://localhost:8000/api/llm/config');
+        const base = single.data?.base_url ? [{ id: 'default', name: 'Default LLM' }] : [];
+        setLlmConnections(base.length ? base : [
+          { id: 'local_ollama', name: 'Local Ollama' },
+          { id: 'azure_openai', name: 'Azure OpenAI' },
+          { id: 'openai_gpt4', name: 'OpenAI GPT-4' },
+        ]);
+      }
+    } catch (error) {
+      console.error('Error fetching LLM connections:', error);
+      // Keep minimal mock for UI continuity
       setLlmConnections([
         { id: 'local_ollama', name: 'Local Ollama' },
         { id: 'azure_openai', name: 'Azure OpenAI' },
         { id: 'openai_gpt4', name: 'OpenAI GPT-4' },
       ]);
-    } catch (error) {
-      console.error('Error fetching LLM connections:', error);
     }
   };
 

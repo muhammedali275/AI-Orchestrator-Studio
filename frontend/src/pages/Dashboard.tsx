@@ -8,6 +8,7 @@ import {
   Card,
   CardContent,
   LinearProgress,
+  CircularProgress,
   Chip,
   Avatar,
   IconButton,
@@ -57,6 +58,23 @@ interface QuickLink {
   path: string;
   icon: JSX.Element;
   color: string;
+}
+
+type NodeStatus = 'online' | 'degraded' | 'offline';
+
+interface ServerNode {
+  id: string;
+  name: string;
+  role: string;
+  status: NodeStatus;
+  lastHeartbeat?: string;
+}
+
+interface NodesSummary {
+  total: number;
+  online: number;
+  degraded: number;
+  offline: number;
 }
 
 const spin = keyframes`
@@ -257,6 +275,295 @@ const Dashboard: React.FC = () => {
       </Box>
     </Box>
   );
+
+  const ActiveServerNodesFlow: React.FC = () => {
+    const [nodes, setNodes] = useState<ServerNode[]>([]);
+    const [summary, setSummary] = useState<NodesSummary>({ total: 0, online: 0, degraded: 0, offline: 0 });
+    const [loadingNodes, setLoadingNodes] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+    const statusColor = (status: NodeStatus) => {
+      if (status === 'online') return '#10b981';
+      if (status === 'degraded') return '#f59e0b';
+      return '#ef4444';
+    };
+
+    const loadNodes = async () => {
+      setLoadingNodes(true);
+      try {
+        const res = await axios.get('http://localhost:8000/api/monitoring/connectivity');
+        const data = res.data || {};
+        const services = data.services || {};
+        const s = data.summary || {};
+        const timestamp: string | undefined = data.timestamp;
+
+        const newNodes: ServerNode[] = [];
+
+        const orchestratorStatus: NodeStatus = s.unreachable && s.unreachable > 0 ? 'degraded' : 'online';
+        newNodes.push({
+          id: 'orchestrator',
+          name: 'Orchestrator Node',
+          role: 'Control Plane',
+          status: orchestratorStatus,
+          lastHeartbeat: timestamp,
+        });
+
+        if (services.llm) {
+          newNodes.push({
+            id: 'llm',
+            name: 'LLM Service',
+            role: 'Model Gateway',
+            status: services.llm.reachable ? 'online' : 'offline',
+            lastHeartbeat: timestamp,
+          });
+        }
+
+        if (services.agents) {
+          const entries = Object.entries(services.agents as Record<string, any>);
+          if (entries.length > 0) {
+            const reachable = entries.filter(([, v]) => v && v.reachable).length;
+            const status: NodeStatus = reachable === entries.length ? 'online' : reachable === 0 ? 'offline' : 'degraded';
+            newNodes.push({
+              id: 'agents',
+              name: `External Agents (${entries.length})`,
+              role: 'Tools & Connectors',
+              status,
+              lastHeartbeat: timestamp,
+            });
+          }
+        }
+
+        if (services.datasources) {
+          const entries = Object.entries(services.datasources as Record<string, any>);
+          if (entries.length > 0) {
+            const reachable = entries.filter(([, v]) => v && v.reachable).length;
+            const status: NodeStatus = reachable === entries.length ? 'online' : reachable === 0 ? 'offline' : 'degraded';
+            newNodes.push({
+              id: 'datasources',
+              name: `Data Sources (${entries.length})`,
+              role: 'Databases & APIs',
+              status,
+              lastHeartbeat: timestamp,
+            });
+          }
+        }
+
+        const onlineCount = newNodes.filter((n) => n.status === 'online').length;
+        const degradedCount = newNodes.filter((n) => n.status === 'degraded').length;
+        const offlineCount = newNodes.filter((n) => n.status === 'offline').length;
+
+        setNodes(newNodes);
+        setSummary({
+          total: newNodes.length,
+          online: onlineCount,
+          degraded: degradedCount,
+          offline: offlineCount,
+        });
+        setLastUpdated(timestamp || new Date().toISOString());
+        setError(null);
+      } catch (err: any) {
+        console.error('Error loading server nodes flow:', err);
+        setError('Unable to load server node status.');
+      } finally {
+        setLoadingNodes(false);
+      }
+    };
+
+    useEffect(() => {
+      loadNodes();
+      const interval = setInterval(loadNodes, 15000);
+      return () => clearInterval(interval);
+    }, []);
+
+    return (
+      <Box sx={{ width: '100%', px: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Chip
+              label={`Total: ${summary.total}`}
+              size="small"
+              sx={{ background: 'rgba(148, 163, 184, 0.2)', color: '#e5e7eb', fontWeight: 600 }}
+            />
+            <Chip
+              label={`Online: ${summary.online}`}
+              size="small"
+              sx={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontWeight: 600 }}
+            />
+            <Chip
+              label={`Degraded: ${summary.degraded}`}
+              size="small"
+              sx={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', fontWeight: 600 }}
+            />
+            <Chip
+              label={`Offline: ${summary.offline}`}
+              size="small"
+              sx={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontWeight: 600 }}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {lastUpdated && (
+              <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.9)' }}>
+                Last updated: {new Date(lastUpdated).toLocaleTimeString()}
+              </Typography>
+            )}
+            <Tooltip title="Refresh now">
+              <IconButton
+                size="small"
+                onClick={loadNodes}
+                sx={{
+                  color: '#9ca3af',
+                  '&:hover': { color: '#e5e7eb', background: 'rgba(55, 65, 81, 0.6)' },
+                }}
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            {loadingNodes && <CircularProgress size={18} sx={{ color: '#667eea' }} />}
+          </Box>
+        </Box>
+
+        {error && (
+          <Typography variant="caption" color="error" sx={{ mb: 1, display: 'block' }}>
+            {error}
+          </Typography>
+        )}
+
+        <Box
+          sx={{
+            mt: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 2,
+            maxWidth: 680,
+            mx: 'auto',
+          }}
+        >
+          {nodes.length === 0 && !loadingNodes && !error ? (
+            <Box sx={{ textAlign: 'center', mx: 'auto' }}>
+              <Typography variant="body2" sx={{ color: 'rgba(209, 213, 219, 0.9)', mb: 0.5 }}>
+                No monitored server nodes yet.
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.9)', display: 'block', mb: 1.5 }}>
+                Configure monitoring targets on the Monitoring & Services page.
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => navigate('/monitoring')}
+                sx={{
+                  borderColor: 'rgba(129, 140, 248, 0.7)',
+                  color: '#a5b4fc',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  '&:hover': {
+                    borderColor: '#818cf8',
+                    background: 'rgba(79, 70, 229, 0.15)',
+                  },
+                }}
+              >
+                Open Monitoring
+              </Button>
+            </Box>
+          ) : (
+            nodes.map((node, index) => (
+              <React.Fragment key={node.id}>
+                <Tooltip
+                  title={`${node.role}${node.lastHeartbeat ? ` • Last heartbeat: ${node.lastHeartbeat}` : ''}`}
+                  arrow
+                >
+                  <Box
+                    sx={{
+                      minWidth: 120,
+                      px: 1.5,
+                      py: 1,
+                      borderRadius: 999,
+                      background: 'rgba(15, 23, 42, 0.9)',
+                      border: `1px solid ${statusColor(node.status)}`,
+                      boxShadow: `0 0 16px ${statusColor(node.status)}44`,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 0.5,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <Box
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          background: statusColor(node.status),
+                          boxShadow: `0 0 10px ${statusColor(node.status)}`,
+                          animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        }}
+                      />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {node.name}
+                      </Typography>
+                    </Box>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'rgba(148, 163, 184, 0.9)',
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.6,
+                        fontSize: 10,
+                      }}
+                    >
+                      {node.status.toUpperCase()}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+                {index < nodes.length - 1 && (
+                  <Box
+                    sx={{
+                      flex: 1,
+                      mx: 1,
+                      height: 2,
+                      position: 'relative',
+                      background: 'linear-gradient(90deg, rgba(148, 163, 184, 0.3), rgba(129, 140, 248, 0.7))',
+                      '&::after': {
+                        content: '""',
+                        position: 'absolute',
+                        right: -6,
+                        top: -3,
+                        borderTop: '4px solid transparent',
+                        borderBottom: '4px solid transparent',
+                        borderLeft: '6px solid rgba(129, 140, 248, 0.8)',
+                      },
+                    }}
+                  />
+                )}
+              </React.Fragment>
+            ))
+          )}
+        </Box>
+
+        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center', gap: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+            <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.9)' }}>
+              Online
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 8px #f59e0b' }} />
+            <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.9)' }}>
+              Degraded
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 8px #ef4444' }} />
+            <Typography variant="caption" sx={{ color: 'rgba(148, 163, 184, 0.9)' }}>
+              Offline
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+    );
+  };
 
   return (
     <Box className="fade-in">
@@ -628,11 +935,11 @@ const Dashboard: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
               <PublicIcon sx={{ color: '#667eea' }} />
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Deployment Location - Kuwait
+                Active Server Nodes Flow
               </Typography>
             </Box>
             
-            {/* Kuwait Map */}
+            {/* Active Server Nodes Flow Visualization */}
             <Box
               sx={{
                 position: 'relative',
@@ -647,219 +954,7 @@ const Dashboard: React.FC = () => {
                 justifyContent: 'center',
               }}
             >
-              {/* Kuwait Map SVG - More Accurate Design */}
-              <svg
-                viewBox="0 0 500 400"
-                style={{ width: '100%', height: '100%' }}
-              >
-                {/* Background - Sea (Persian Gulf) */}
-                <rect x="0" y="0" width="500" height="400" fill="rgba(59, 130, 246, 0.08)" />
-                
-                {/* Kuwait Country Outline - More Accurate Shape */}
-                <path
-                  d="M 80 120 L 100 100 L 130 90 L 160 85 L 190 80 L 220 78 L 250 80 L 280 85 L 310 95 L 340 110 L 360 130 L 375 155 L 380 180 L 378 205 L 370 230 L 355 255 L 335 275 L 310 290 L 280 300 L 250 305 L 220 308 L 190 305 L 160 298 L 135 285 L 115 268 L 100 248 L 88 225 L 82 200 L 80 175 L 82 150 L 85 135 Z"
-                  fill="rgba(245, 240, 230, 0.95)"
-                  stroke="#d4a574"
-                  strokeWidth="2.5"
-                  style={{
-                    filter: 'drop-shadow(0 4px 12px rgba(102, 126, 234, 0.25))',
-                  }}
-                />
-                
-                {/* Coastline Detail - Kuwait Bay */}
-                <path
-                  d="M 280 85 Q 300 100 310 120 Q 315 140 320 160 L 330 180 Q 335 200 330 220 L 320 240"
-                  fill="none"
-                  stroke="rgba(59, 130, 246, 0.3)"
-                  strokeWidth="3"
-                />
-                
-                {/* Bubiyan Island */}
-                <ellipse
-                  cx="340"
-                  cy="100"
-                  rx="25"
-                  ry="18"
-                  fill="rgba(245, 240, 230, 0.9)"
-                  stroke="#d4a574"
-                  strokeWidth="1.5"
-                />
-                <text x="340" y="95" textAnchor="middle" fill="#8b7355" fontSize="9" fontWeight="500">
-                  Bubiyan
-                </text>
-                <text x="340" y="107" textAnchor="middle" fill="#8b7355" fontSize="8">
-                  Island
-                </text>
-                
-                {/* Major Cities and Locations */}
-                
-                {/* Kuwait City - Capital (Primary Data Center) */}
-                <circle
-                  cx="280"
-                  cy="180"
-                  r="10"
-                  fill="#667eea"
-                  stroke="#ffffff"
-                  strokeWidth="2"
-                  style={{
-                    filter: 'drop-shadow(0 0 12px #667eea)',
-                    animation: 'pulse 2s ease-in-out infinite',
-                  }}
-                />
-                <text
-                  x="280"
-                  y="205"
-                  textAnchor="middle"
-                  fill="#667eea"
-                  fontSize="13"
-                  fontWeight="700"
-                >
-                  Kuwait City
-                </text>
-                <text
-                  x="280"
-                  y="217"
-                  textAnchor="middle"
-                  fill="#667eea"
-                  fontSize="9"
-                  opacity="0.8"
-                >
-                  مدينة الكويت
-                </text>
-                
-                {/* Jahra */}
-                <circle cx="220" cy="140" r="6" fill="#f59e0b" stroke="#ffffff" strokeWidth="1.5" />
-                <text x="220" y="130" textAnchor="middle" fill="#f59e0b" fontSize="11" fontWeight="600">
-                  Jahra
-                </text>
-                
-                {/* Hawalli */}
-                <circle cx="295" cy="195" r="6" fill="#764ba2" stroke="#ffffff" strokeWidth="1.5" />
-                <text x="295" y="210" textAnchor="middle" fill="#764ba2" fontSize="11" fontWeight="600">
-                  Hawalli
-                </text>
-                
-                {/* Farwaniya */}
-                <circle cx="250" cy="185" r="6" fill="#10b981" stroke="#ffffff" strokeWidth="1.5" />
-                <text x="250" y="175" textAnchor="middle" fill="#10b981" fontSize="11" fontWeight="600">
-                  Farwaniya
-                </text>
-                
-                {/* Ahmadi */}
-                <circle cx="285" cy="240" r="6" fill="#3b82f6" stroke="#ffffff" strokeWidth="1.5" />
-                <text x="285" y="255" textAnchor="middle" fill="#3b82f6" fontSize="11" fontWeight="600">
-                  Ahmadi
-                </text>
-                
-                {/* Sabah Al-Ahmad */}
-                <circle cx="310" cy="260" r="5" fill="#ec4899" stroke="#ffffff" strokeWidth="1.5" />
-                <text x="310" y="273" textAnchor="middle" fill="#ec4899" fontSize="10" fontWeight="500">
-                  Sabah Al-Ahmad
-                </text>
-                
-                {/* Al Wafrah */}
-                <circle cx="260" cy="270" r="5" fill="#8b5cf6" stroke="#ffffff" strokeWidth="1.5" />
-                <text x="260" y="283" textAnchor="middle" fill="#8b5cf6" fontSize="10" fontWeight="500">
-                  Al Wafrah
-                </text>
-                
-                {/* Ar Ruqi */}
-                <circle cx="140" cy="220" r="5" fill="#f97316" stroke="#ffffff" strokeWidth="1.5" />
-                <text x="140" y="233" textAnchor="middle" fill="#f97316" fontSize="10" fontWeight="500">
-                  Ar Ruqi
-                </text>
-                
-                {/* Al Khiran */}
-                <circle cx="340" cy="280" r="5" fill="#06b6d4" stroke="#ffffff" strokeWidth="1.5" />
-                <text x="340" y="293" textAnchor="middle" fill="#06b6d4" fontSize="10" fontWeight="500">
-                  Al Khiran
-                </text>
-                
-                {/* Abdali */}
-                <circle cx="200" cy="95" r="5" fill="#84cc16" stroke="#ffffff" strokeWidth="1.5" />
-                <text x="200" y="88" textAnchor="middle" fill="#84cc16" fontSize="10" fontWeight="500">
-                  Abdali
-                </text>
-                
-                {/* Major Roads */}
-                <line x1="220" y1="140" x2="280" y2="180" stroke="rgba(212, 165, 116, 0.4)" strokeWidth="2" strokeDasharray="4,4" />
-                <line x1="280" y1="180" x2="295" y2="195" stroke="rgba(212, 165, 116, 0.4)" strokeWidth="2" strokeDasharray="4,4" />
-                <line x1="280" y1="180" x2="285" y2="240" stroke="rgba(212, 165, 116, 0.4)" strokeWidth="2" strokeDasharray="4,4" />
-                
-                {/* Highway Numbers */}
-                <rect x="245" y="155" width="25" height="15" fill="#ffffff" stroke="#667eea" strokeWidth="1" rx="3" />
-                <text x="257.5" y="165" textAnchor="middle" fill="#667eea" fontSize="10" fontWeight="700">
-                  80
-                </text>
-                
-                <rect x="295" y="220" width="25" height="15" fill="#ffffff" stroke="#667eea" strokeWidth="1" rx="3" />
-                <text x="307.5" y="230" textAnchor="middle" fill="#667eea" fontSize="10" fontWeight="700">
-                  40
-                </text>
-                
-                {/* Border Lines */}
-                <line x1="80" y1="120" x2="200" y2="95" stroke="#d4a574" strokeWidth="2" strokeDasharray="8,4" opacity="0.6" />
-                <line x1="140" y1="220" x2="160" y2="298" stroke="#d4a574" strokeWidth="2" strokeDasharray="8,4" opacity="0.6" />
-                
-                {/* Compass Rose */}
-                <g transform="translate(430, 50)">
-                  <circle cx="0" cy="0" r="25" fill="rgba(102, 126, 234, 0.1)" stroke="#667eea" strokeWidth="1.5" />
-                  <polygon points="0,-18 3,0 0,18 -3,0" fill="#667eea" />
-                  <text x="0" y="-23" textAnchor="middle" fill="#667eea" fontSize="12" fontWeight="700">N</text>
-                </g>
-                
-                {/* Scale Bar */}
-                <g transform="translate(50, 350)">
-                  <line x1="0" y1="0" x2="80" y2="0" stroke="#667eea" strokeWidth="2" />
-                  <line x1="0" y1="-5" x2="0" y2="5" stroke="#667eea" strokeWidth="2" />
-                  <line x1="80" y1="-5" x2="80" y2="5" stroke="#667eea" strokeWidth="2" />
-                  <text x="40" y="15" textAnchor="middle" fill="#667eea" fontSize="10" fontWeight="600">
-                    50 km
-                  </text>
-                </g>
-                
-                {/* Coordinates */}
-                <text x="420" y="200" fill="rgba(102, 126, 234, 0.6)" fontSize="11" fontWeight="500">
-                  29.3°N
-                </text>
-                <text x="240" y="380" fill="rgba(102, 126, 234, 0.6)" fontSize="11" fontWeight="500">
-                  47.9°E
-                </text>
-                
-                {/* Country Label */}
-                <text x="180" y="200" textAnchor="middle" fill="#d4a574" fontSize="28" fontWeight="700" opacity="0.3">
-                  Kuwait
-                </text>
-              </svg>
-              
-              {/* Enhanced Legend */}
-              <Box
-                sx={{
-                  position: 'absolute',
-                  bottom: 15,
-                  left: 15,
-                  background: 'rgba(0, 0, 0, 0.85)',
-                  backdropFilter: 'blur(12px)',
-                  borderRadius: 2,
-                  p: 1.5,
-                  border: '1px solid rgba(102, 126, 234, 0.3)',
-                }}
-              >
-                <Typography variant="caption" sx={{ color: 'white', display: 'block', mb: 1, fontWeight: 700 }}>
-                  <LocationIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 0.5 }} />
-                  Deployment Zones
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                  <Typography variant="caption" sx={{ color: '#667eea', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: '#667eea', boxShadow: '0 0 8px #667eea' }} />
-                    Primary Data Center
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                    Active Zones: 9
-                  </Typography>
-                </Box>
-              </Box>
+              <ActiveServerNodesFlow />
             </Box>
             
             {/* Zone Statistics */}

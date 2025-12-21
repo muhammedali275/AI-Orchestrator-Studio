@@ -18,12 +18,14 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import BuildIcon from '@mui/icons-material/Build';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
+import MemoryIcon from '@mui/icons-material/Memory';
 import SecurityIcon from '@mui/icons-material/Security';
 import HttpsIcon from '@mui/icons-material/Https';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import RouterIcon from '@mui/icons-material/Router';
 import InfoIcon from '@mui/icons-material/Info';
+import SystemUpdateIcon from '@mui/icons-material/SystemUpdate';
 
 const drawerWidth = 280;
 
@@ -45,6 +47,8 @@ const menuItems: MenuItem[] = [
   { text: 'Credentials & Security', path: '/credentials', icon: <SecurityIcon /> },
   { text: 'Certificates (HTTPS)', path: '/certificates', icon: <HttpsIcon /> },
   { text: 'Monitoring & Services', path: '/monitoring', icon: <MonitorHeartIcon /> },
+  { text: 'Caching & Memory', path: '/memory', icon: <MemoryIcon /> },
+  { text: 'Upgrades & Dependencies', path: '/upgrades', icon: <SystemUpdateIcon /> },
   { text: 'Internal Chat Test', path: '/chat', icon: <ChatIcon /> },
   { text: 'About', path: '/about', icon: <InfoIcon /> },
 ];

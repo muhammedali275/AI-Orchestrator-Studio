@@ -58,16 +58,31 @@ const SystemConfig: React.FC = () => {
     timeout: '60',
   });
 
-  // Database Configuration
+  // Database & Caching Configuration
   const [dbConfig, setDbConfig] = useState({
+    // PostgreSQL
     postgres_host: 'localhost',
     postgres_port: '5432',
     postgres_db: 'orchestrator',
     postgres_user: 'postgres',
     postgres_password: '',
+    // Redis Cache
     redis_host: 'localhost',
     redis_port: '6379',
     redis_password: '',
+    redis_db: '0',
+    redis_ttl_seconds: '3600',
+    // Vector Database
+    vector_db_type: 'chroma',
+    vector_db_url: '',
+    vector_db_api_key: '',
+    vector_db_collection: 'orchestrator_vectors',
+    vector_db_dimension: '1536',
+    // Cache Settings
+    cache_enabled: 'true',
+    cache_ttl_seconds: '3600',
+    memory_enabled: 'true',
+    memory_max_messages: '50',
   });
 
   // External Agents Configuration
@@ -167,7 +182,27 @@ const SystemConfig: React.FC = () => {
         POSTGRES_DB: dbConfig.postgres_db,
         POSTGRES_USER: dbConfig.postgres_user,
         POSTGRES_PASSWORD: dbConfig.postgres_password,
-        REDIS_URL: `redis://${dbConfig.redis_host}:${dbConfig.redis_port}`,
+        
+        // Redis
+        REDIS_HOST: dbConfig.redis_host,
+        REDIS_PORT: dbConfig.redis_port,
+        REDIS_PASSWORD: dbConfig.redis_password,
+        REDIS_DB: dbConfig.redis_db,
+        REDIS_TTL_SECONDS: dbConfig.redis_ttl_seconds,
+        REDIS_URL: `redis://${dbConfig.redis_host}:${dbConfig.redis_port}/${dbConfig.redis_db}`,
+        
+        // Vector Database
+        VECTOR_DB_TYPE: dbConfig.vector_db_type,
+        VECTOR_DB_URL: dbConfig.vector_db_url,
+        VECTOR_DB_API_KEY: dbConfig.vector_db_api_key,
+        VECTOR_DB_COLLECTION: dbConfig.vector_db_collection,
+        VECTOR_DB_DIMENSION: dbConfig.vector_db_dimension,
+        
+        // Cache & Memory
+        CACHE_ENABLED: dbConfig.cache_enabled,
+        CACHE_TTL_SECONDS: dbConfig.cache_ttl_seconds,
+        MEMORY_ENABLED: dbConfig.memory_enabled,
+        MEMORY_MAX_MESSAGES: dbConfig.memory_max_messages,
 
         // External Agents
         EXTERNAL_AGENT_BASE_URL: `http://${agentsConfig.zain_agent_ip}:${agentsConfig.zain_agent_port}`,
@@ -232,6 +267,28 @@ const SystemConfig: React.FC = () => {
     } catch (error: any) {
       console.error('Error saving configurations:', error);
       setMessage(`❌ Error: ${error.response?.data?.detail || error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Enable GPT-5.1 for all clients (one-click)
+  const enableGPT51 = async () => {
+    try {
+      setLoading(true);
+      // update local UI immediately
+      setLlmConfig({ ...llmConfig, model: 'gpt-5.1' });
+
+      // Send minimal env update to backend to set default model
+      await axios.post('http://localhost:8000/api/config/env', {
+        LLM_DEFAULT_MODEL: 'gpt-5.1'
+      });
+
+      setMessage('✅ GPT-5.1 enabled for all clients. Backend will reload with new settings.');
+      setTimeout(() => setMessage(''), 5000);
+    } catch (error: any) {
+      console.error('Error enabling GPT-5.1:', error);
+      setMessage(`❌ Error enabling GPT-5.1: ${error.response?.data?.detail || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -486,6 +543,20 @@ const SystemConfig: React.FC = () => {
                 </CardContent>
               </Card>
             </Grid>
+            <Grid item xs={12} sx={{ mt: 2 }}>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={enableGPT51}
+                startIcon={<SaveIcon />}
+                disabled={loading}
+              >
+                Enable GPT-5.1 for all clients
+              </Button>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                Sets the default LLM model to `gpt-5.1` and updates backend configuration.
+              </Typography>
+            </Grid>
           </Grid>
         </TabPanel>
 
@@ -591,6 +662,165 @@ const SystemConfig: React.FC = () => {
               />
             </Grid>
           </Grid>
+
+          <Divider sx={{ my: 4 }} />
+
+          {/* Vector Database */}
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
+            Vector Database (RAG / Semantic Cache)
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                select
+                label="Vector DB Type"
+                fullWidth
+                value={dbConfig.vector_db_type}
+                onChange={(e) => setDbConfig({ ...dbConfig, vector_db_type: e.target.value })}
+                helperText="Select vector database provider"
+                SelectProps={{ native: true }}
+              >
+                <option value="chroma">ChromaDB (Local/Cloud)</option>
+                <option value="pinecone">Pinecone</option>
+                <option value="weaviate">Weaviate</option>
+                <option value="qdrant">Qdrant</option>
+                <option value="milvus">Milvus</option>
+                <option value="faiss">FAISS (Local)</option>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Vector Dimension"
+                fullWidth
+                type="number"
+                value={dbConfig.vector_db_dimension}
+                onChange={(e) => setDbConfig({ ...dbConfig, vector_db_dimension: e.target.value })}
+                placeholder="1536"
+                helperText="Embedding vector size (1536 for OpenAI)"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Vector DB URL"
+                fullWidth
+                value={dbConfig.vector_db_url}
+                onChange={(e) => setDbConfig({ ...dbConfig, vector_db_url: e.target.value })}
+                placeholder="http://localhost:8000 or cloud URL"
+                helperText="Leave blank for local FAISS"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="API Key"
+                fullWidth
+                type="password"
+                value={dbConfig.vector_db_api_key}
+                onChange={(e) => setDbConfig({ ...dbConfig, vector_db_api_key: e.target.value })}
+                placeholder="Optional for cloud providers"
+                helperText="Required for Pinecone, Weaviate Cloud, etc."
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Collection Name"
+                fullWidth
+                value={dbConfig.vector_db_collection}
+                onChange={(e) => setDbConfig({ ...dbConfig, vector_db_collection: e.target.value })}
+                placeholder="orchestrator_vectors"
+                helperText="Vector collection/index name"
+              />
+            </Grid>
+          </Grid>
+
+          <Divider sx={{ my: 4 }} />
+
+          {/* Cache & Memory Settings */}
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
+            Cache & Memory Settings
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                select
+                label="Enable Response Caching"
+                fullWidth
+                value={dbConfig.cache_enabled}
+                onChange={(e) => setDbConfig({ ...dbConfig, cache_enabled: e.target.value })}
+                helperText="Cache LLM responses for faster replies"
+                SelectProps={{ native: true }}
+              >
+                <option value="true">Enabled</option>
+                <option value="false">Disabled</option>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Cache TTL (seconds)"
+                fullWidth
+                type="number"
+                value={dbConfig.cache_ttl_seconds}
+                onChange={(e) => setDbConfig({ ...dbConfig, cache_ttl_seconds: e.target.value })}
+                placeholder="3600"
+                helperText="How long to keep cached responses"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                select
+                label="Enable Conversation Memory"
+                fullWidth
+                value={dbConfig.memory_enabled}
+                onChange={(e) => setDbConfig({ ...dbConfig, memory_enabled: e.target.value })}
+                helperText="Store conversation history"
+                SelectProps={{ native: true }}
+              >
+                <option value="true">Enabled</option>
+                <option value="false">Disabled</option>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Max Messages in Memory"
+                fullWidth
+                type="number"
+                value={dbConfig.memory_max_messages}
+                onChange={(e) => setDbConfig({ ...dbConfig, memory_max_messages: e.target.value })}
+                placeholder="50"
+                helperText="Maximum conversation history length"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Redis Database Number"
+                fullWidth
+                type="number"
+                value={dbConfig.redis_db}
+                onChange={(e) => setDbConfig({ ...dbConfig, redis_db: e.target.value })}
+                placeholder="0"
+                helperText="Redis DB index (0-15)"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Redis TTL (seconds)"
+                fullWidth
+                type="number"
+                value={dbConfig.redis_ttl_seconds}
+                onChange={(e) => setDbConfig({ ...dbConfig, redis_ttl_seconds: e.target.value })}
+                placeholder="3600"
+                helperText="Default Redis key expiration"
+              />
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mt: 3, p: 2, bgcolor: 'info.main', borderRadius: 1, color: 'info.contrastText' }}>
+            <Typography variant="body2">
+              <strong>ℹ️ Caching Layers:</strong> This system uses multi-tier caching:
+              <br />• <strong>Redis:</strong> Exact match cache for fast repeated queries
+              <br />• <strong>Vector DB:</strong> Semantic cache for similar questions
+              <br />• <strong>Memory:</strong> Conversation history for context-aware responses
+            </Typography>
+          </Box>
         </TabPanel>
 
         {/* Tab 3: External Agents */}

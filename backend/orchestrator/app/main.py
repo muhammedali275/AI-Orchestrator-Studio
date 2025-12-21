@@ -29,6 +29,7 @@ from .api.files import router as files_router
 from .api.api_keys import router as api_keys_router
 from .api.frontend_config import router as frontend_config_router
 from .api.memory_management import router as memory_management_router
+from .api.upgrades import router as upgrades_router
 from .db.database import init_db
 
 # Configure logging
@@ -206,10 +207,7 @@ app.include_router(files_router)
 app.include_router(api_keys_router)
 app.include_router(frontend_config_router)
 app.include_router(memory_management_router)
-
-# Ensure chat_ui_router is registered
-from app.api.chat_ui import router as chat_ui_router_direct
-app.include_router(chat_ui_router_direct)
+app.include_router(upgrades_router)
 
 
 @app.get("/health")

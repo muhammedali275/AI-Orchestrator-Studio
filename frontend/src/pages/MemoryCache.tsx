@@ -20,7 +20,9 @@ import {
   Select,
   MenuItem,
   InputLabel,
-  FormControl
+  FormControl,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -45,6 +47,14 @@ interface MemorySettings {
   storage_type: 'redis' | 'local' | 'postgres';
 }
 
+interface AdditionalCacheDb {
+  id: number;
+  name: string;
+  type: 'postgres' | 'mysql' | 'mongodb' | 'redis' | 'custom';
+  connection_string: string;
+  enabled: boolean;
+}
+
 const MemoryCache: React.FC = () => {
   const [stats, setStats] = useState({
     conversation_count: 0,
@@ -67,6 +77,14 @@ const MemoryCache: React.FC = () => {
   const [testResults, setTestResults] = useState<{[key: string]: boolean}>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [additionalDbs, setAdditionalDbs] = useState<AdditionalCacheDb[]>([{
+    id: 1,
+    name: 'Analytics Cache DB',
+    type: 'postgres',
+    connection_string: 'postgres://user:password@localhost:5432/cache_db',
+    enabled: true,
+  }]);
+  const [activeAdditionalDbId, setActiveAdditionalDbId] = useState<number>(1);
 
   useEffect(() => {
     fetchStats();
@@ -153,6 +171,36 @@ const MemoryCache: React.FC = () => {
       ...settings,
       [field]: value
     });
+    if (!isEditing) setIsEditing(true);
+  };
+
+  const handleAdditionalDbChange = (id: number, field: keyof AdditionalCacheDb, value: any) => {
+    setAdditionalDbs(prev => prev.map(db => db.id === id ? { ...db, [field]: value } : db));
+    if (!isEditing) setIsEditing(true);
+  };
+
+  const handleAddAdditionalDb = () => {
+    const nextId = additionalDbs.length ? Math.max(...additionalDbs.map(db => db.id)) + 1 : 1;
+    const newDb: AdditionalCacheDb = {
+      id: nextId,
+      name: `Cache DB ${nextId}`,
+      type: 'postgres',
+      connection_string: 'postgres://user:password@host:5432/cache_db',
+      enabled: true,
+    };
+    setAdditionalDbs(prev => [...prev, newDb]);
+    setActiveAdditionalDbId(nextId);
+    if (!isEditing) setIsEditing(true);
+  };
+
+  const handleRemoveAdditionalDb = (id: number) => {
+    setAdditionalDbs(prev => prev.filter(db => db.id !== id));
+    if (activeAdditionalDbId === id && additionalDbs.length > 1) {
+      const remaining = additionalDbs.filter(db => db.id !== id);
+      if (remaining.length) {
+        setActiveAdditionalDbId(remaining[0].id);
+      }
+    }
     if (!isEditing) setIsEditing(true);
   };
 
@@ -298,6 +346,122 @@ const MemoryCache: React.FC = () => {
                     { value: 4096, label: '4GB' }
                   ]}
                 />
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={12}>
+            <Card sx={{ mt: 3 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                  Additional Cache Databases
+                </Typography>
+
+                {additionalDbs.length === 0 ? (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      No additional cache databases configured. Use the button below to add one.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <>
+                    <Tabs
+                      value={additionalDbs.findIndex(db => db.id === activeAdditionalDbId)}
+                      onChange={(_, index) => {
+                        const db = additionalDbs[index];
+                        if (db) setActiveAdditionalDbId(db.id);
+                      }}
+                      variant="scrollable"
+                      scrollButtons="auto"
+                      sx={{ mb: 2 }}
+                    >
+                      {additionalDbs.map((db) => (
+                        <Tab key={db.id} label={db.name} />
+                      ))}
+                    </Tabs>
+
+                    {additionalDbs.map((db) => (
+                      db.id === activeAdditionalDbId && (
+                        <Box key={db.id} sx={{ mt: 1 }}>
+                          <Grid container spacing={2}>
+                            <Grid item xs={12} md={4}>
+                              <TextField
+                                label="Name"
+                                fullWidth
+                                value={db.name}
+                                onChange={(e) => handleAdditionalDbChange(db.id, 'name', e.target.value)}
+                                helperText="Friendly name (e.g. Reporting Cache DB)"
+                              />
+                            </Grid>
+                            <Grid item xs={12} md={4}>
+                              <FormControl fullWidth>
+                                <InputLabel>Type</InputLabel>
+                                <Select
+                                  value={db.type}
+                                  label="Type"
+                                  onChange={(e) => handleAdditionalDbChange(db.id, 'type', e.target.value)}
+                                >
+                                  <MenuItem value="postgres">PostgreSQL</MenuItem>
+                                  <MenuItem value="mysql">MySQL</MenuItem>
+                                  <MenuItem value="mongodb">MongoDB</MenuItem>
+                                  <MenuItem value="redis">Redis</MenuItem>
+                                  <MenuItem value="custom">Custom</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12} md={4}>
+                              <FormControlLabel
+                                control={
+                                  <Switch
+                                    checked={db.enabled}
+                                    onChange={(e) => handleAdditionalDbChange(db.id, 'enabled', e.target.checked)}
+                                    color="primary"
+                                  />
+                                }
+                                label="Enabled"
+                              />
+                            </Grid>
+                            <Grid item xs={12}>
+                              <TextField
+                                label="Connection String / DSN"
+                                fullWidth
+                                value={db.connection_string}
+                                onChange={(e) => handleAdditionalDbChange(db.id, 'connection_string', e.target.value)}
+                                placeholder="postgres://user:password@host:5432/db_name"
+                              />
+                            </Grid>
+                            <Grid item xs={12}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="caption" color="text.secondary">
+                                  These databases can be used for long-term caching or analytics.
+                                </Typography>
+                                <Button
+                                  variant="outlined"
+                                  color="error"
+                                  size="small"
+                                  onClick={() => handleRemoveAdditionalDb(db.id)}
+                                >
+                                  Remove Database
+                                </Button>
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </Box>
+                      )
+                    ))}
+                  </>
+                )}
+
+                <Box sx={{ mt: 2 }}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={handleAddAdditionalDb}
+                    startIcon={<StorageIcon />}
+                  >
+                    Add Cache Database
+                  </Button>
+                </Box>
               </CardContent>
             </Card>
           </Grid>

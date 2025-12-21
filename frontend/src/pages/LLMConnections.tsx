@@ -52,6 +52,8 @@ interface LLMConnection {
     connected: boolean;
     message: string;
     latency?: number;
+    provider?: string;
+    status_code?: number;
   };
 }
 
@@ -83,31 +85,47 @@ const LLMConnections: React.FC = () => {
   const fetchConnections = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:8000/api/llm/config', { timeout: 5000 });
-      
-      // Convert single config to array format
-      const singleConfig = response.data;
-      const connection = {
-        id: 'default',
-        name: 'Default LLM',
-        base_url: singleConfig.base_url || '',
-        api_key: singleConfig.api_key || '',
-        model: singleConfig.default_model || '',
-        timeout: singleConfig.timeout_seconds || 60,
-        max_tokens: singleConfig.max_tokens || 2048,
-        temperature: singleConfig.temperature || 0.7,
-        is_local: (singleConfig.base_url || '').includes('localhost') || (singleConfig.base_url || '').includes('11434'),
-      };
-      
-      setConnections([connection]);
+      // Prefer multi-connection endpoint
+      const multi = await axios.get('http://localhost:8000/api/config/llm-connections', { timeout: 5000 });
+      const conns = (multi.data?.connections || []).map((c: any) => ({
+        id: c.id,
+        name: c.name || c.id,
+        base_url: c.base_url || '',
+        api_key: c.api_key || '',
+        model: c.model || '',
+        timeout: c.timeout || 60,
+        max_tokens: c.max_tokens ?? 2048,
+        temperature: c.temperature ?? 0.7,
+        is_local: (c.base_url || '').includes('localhost') || (c.base_url || '').includes('127.0.0.1') || (c.base_url || '').includes('11434'),
+      })) as LLMConnection[];
+
+      if (conns.length > 0) {
+        setConnections(conns);
+      } else {
+        // Fallback to single-config endpoint
+        const response = await axios.get('http://localhost:8000/api/llm/config', { timeout: 5000 });
+        const singleConfig = response.data;
+        const connection = {
+          id: 'default',
+          name: 'Default LLM',
+          base_url: singleConfig.base_url || '',
+          api_key: singleConfig.api_key || '',
+          model: singleConfig.default_model || '',
+          timeout: singleConfig.timeout_seconds || 60,
+          max_tokens: singleConfig.max_tokens || 2048,
+          temperature: singleConfig.temperature || 0.7,
+          is_local: (singleConfig.base_url || '').includes('localhost') || (singleConfig.base_url || '').includes('11434'),
+        } as LLMConnection;
+        setConnections([connection]);
+      }
     } catch (error: any) {
       console.error('Error fetching LLM connections:', error);
       // Show empty state if backend is not configured
       setConnections([]);
       if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
-        setMessage('Backend server not responding. Please ensure the backend is running.');
+        setMessage('Error: Cannot connect to backend. Please ensure the backend server is running on port 8000.');
       } else {
-        setMessage('No LLM configuration found. Click "Add Connection" to configure.');
+        setMessage('Error: No LLM configuration found. Click "Add Connection" to configure.');
       }
     } finally {
       setLoading(false);
@@ -226,22 +244,31 @@ const LLMConnections: React.FC = () => {
   const handleTestConnection = async (connection: LLMConnection) => {
     setTestingConnection(connection.id);
     try {
-      const response = await axios.post('http://localhost:8000/api/llm/test', {
-        prompt: 'Hello, this is a test message.',
-        model: connection.model,
-      });
-      
-      if (response.data.success) {
-        setMessage(`Connection "${connection.name}" is healthy!`);
-        const updatedConnections = connections.map(c =>
-          c.id === connection.id
-            ? { ...c, status: { connected: true, message: 'Connected', latency: response.data.response_time_ms } }
-            : c
-        );
-        setConnections(updatedConnections);
+      // Call backend test endpoint for specific connection id
+      const resp = await axios.post(`http://localhost:8000/api/config/llm-connections/${connection.id}/test`);
+
+      const data = resp.data || {};
+      if (data.connected) {
+        setMessage(`Connection "${connection.name}" is reachable (${Math.round(data.latency_ms)}ms)`);
       } else {
-        setMessage(`Connection "${connection.name}" test failed`);
+        setMessage(`Error: Connection "${connection.name}" unreachable: ${data.message || 'Test failed'}`);
       }
+      const updatedConnections = connections.map(c => {
+        if (c.id !== connection.id) return c;
+        const newBase = typeof data.base_url === 'string' && data.base_url.length > 0 ? data.base_url : c.base_url;
+        return {
+          ...c,
+          base_url: newBase,
+          status: {
+            connected: !!data.connected,
+            message: data.message || (data.connected ? 'Connected' : 'Disconnected'),
+            latency: data.latency_ms || 0,
+            provider: data.provider,
+            status_code: data.status_code,
+          },
+        } as LLMConnection;
+      });
+      setConnections(updatedConnections);
       setTimeout(() => setMessage(''), 3000);
     } catch (error: any) {
       setMessage(`Error testing connection: ${error.message}`);
@@ -381,16 +408,20 @@ const LLMConnections: React.FC = () => {
                   <TableCell>
                     {connection.status ? (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Chip
-                          icon={connection.status.connected ? <CheckCircleIcon /> : <ErrorIcon />}
-                          label={connection.status.connected ? 'Connected' : 'Disconnected'}
-                          size="small"
-                          color={connection.status.connected ? 'success' : 'error'}
-                        />
-                        {connection.status.latency && (
+                        <Tooltip
+                          title={`$${''}{connection.status.message}${connection.status.provider ? ` • ${connection.status.provider}` : ''}${connection.status.status_code ? ` • HTTP ${connection.status.status_code}` : ''}`}
+                        >
+                          <Chip
+                            icon={connection.status.connected ? <CheckCircleIcon /> : <ErrorIcon />}
+                            label={connection.status.connected ? 'Connected' : 'Disconnected'}
+                            size="small"
+                            color={connection.status.connected ? 'success' : 'error'}
+                          />
+                        </Tooltip>
+                        {connection.status.latency !== undefined && (
                           <Chip
                             icon={<SpeedIcon />}
-                            label={`${connection.status.latency.toFixed(0)}ms`}
+                            label={`${Math.round(connection.status.latency)}ms`}
                             size="small"
                             sx={{ background: 'rgba(102, 126, 234, 0.2)', color: '#667eea' }}
                           />

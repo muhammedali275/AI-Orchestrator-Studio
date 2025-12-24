@@ -1,8 +1,15 @@
 #!/bin/bash
 echo "========================================"
-echo "ZainOne Orchestrator Studio"
+echo "AI Orchestrator Studio"
 echo "========================================"
 echo ""
+
+# Detect primary server IP for display (fallback to localhost)
+SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [ -z "$SERVER_IP" ]; then
+    SERVER_IP="localhost"
+fi
+
 echo "Starting Backend Server..."
 
 # Try to detect the terminal emulator
@@ -44,7 +51,7 @@ fi
 echo ""
 echo "========================================"
 echo "Both servers are starting!"
-echo "Backend: http://localhost:8000"
-echo "Frontend: http://localhost:3000"
-echo "API Docs: http://localhost:8000/docs"
+echo "Backend: http://$SERVER_IP:8000"
+echo "Frontend: http://$SERVER_IP:3000"
+echo "API Docs: http://$SERVER_IP:8000/docs"
 echo "========================================"

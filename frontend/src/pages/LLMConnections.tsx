@@ -195,18 +195,34 @@ const LLMConnections: React.FC = () => {
     }
 
     setLoading(true);
+    setMessage('Testing connection...');
+    
     try {
-      // Always use PUT to update the single LLM configuration
-      const response = await axios.put(`http://localhost:8000/api/llm/config`, {
+      // Generate unique ID if creating new connection
+      const connectionId = editingConnection?.id || `llm-${Date.now()}`;
+      
+      // Use POST to create/update connection in multi-connection store
+      // Backend will automatically test the connection before saving
+      const response = await axios.post(`http://localhost:8000/api/config/llm-connections`, {
+        id: connectionId,
+        name: formData.name,
         base_url: normalizedBase,
-        default_model: formData.model,
+        model: formData.model,
         api_key: formData.api_key || undefined,
-        timeout_seconds: formData.timeout,
+        timeout: formData.timeout,
         max_tokens: formData.max_tokens,
         temperature: formData.temperature,
-      }, { timeout: 10000 });
+        is_local: normalizedBase.includes('localhost') || normalizedBase.includes('127.0.0.1'),
+      }, { timeout: 30000 }); // 30s timeout for connection test
 
-      if (response.data.success) {
+      if (response.data.success && response.data.test_result) {
+        const testResult = response.data.test_result;
+        const latencyMsg = testResult.latency_ms ? ` (${Math.round(testResult.latency_ms)}ms)` : '';
+        setMessage(`✓ Connection successful! ${testResult.message}${latencyMsg}`);
+        await fetchConnections();
+        handleCloseDialog();
+        setTimeout(() => setMessage(''), 5000);
+      } else if (response.data.success) {
         setMessage('LLM connection saved successfully! ✓');
         await fetchConnections();
         handleCloseDialog();
@@ -220,6 +236,9 @@ const LLMConnections: React.FC = () => {
       console.error('Error saving connection:', error);
       if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
         setMessage('Cannot connect to backend. Please ensure the backend server is running on port 8000.');
+      } else if (error.response?.status === 400) {
+        // Connection test failed
+        setMessage(`⚠️ Connection test failed: ${error.response?.data?.detail || 'Server unreachable'}`);
       } else {
         setMessage(`Error: ${error.response?.data?.detail || error.message}`);
       }

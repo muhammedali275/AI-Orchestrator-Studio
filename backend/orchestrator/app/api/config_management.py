@@ -480,6 +480,129 @@ async def get_llm_connections(settings: Settings = Depends(get_settings)) -> Dic
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/llm-connections")
+async def create_llm_connection(connection: LLMConnection) -> Dict[str, Any]:
+    """Create or update an LLM connection in llm_connections.json after testing connectivity."""
+    import time as _time
+    import httpx as _httpx
+    
+    # First, test the connection
+    test_result = {
+        "connected": False,
+        "message": "Not tested",
+        "latency_ms": 0,
+        "provider": "unknown"
+    }
+    
+    try:
+        base_url = connection.base_url.rstrip('/')
+        headers = {"Content-Type": "application/json"}
+        if connection.api_key:
+            headers["Authorization"] = f"Bearer {connection.api_key}"
+        
+        # Detect provider
+        def detect_provider(url: str) -> str:
+            u = (url or "").lower()
+            if "ollama" in u or "11434" in u:
+                return "ollama"
+            if "openai" in u or "/v1" in u:
+                return "openai"
+            return "unknown"
+        
+        provider = detect_provider(base_url)
+        test_result["provider"] = provider
+        
+        start = _time.time()
+        async with _httpx.AsyncClient(timeout=connection.timeout or 10, headers=headers) as client:
+            if provider == "ollama":
+                # Try /api/tags for Ollama
+                try:
+                    resp = await client.get(f"{base_url}/api/tags")
+                    if resp.status_code == 200:
+                        test_result["connected"] = True
+                        test_result["message"] = "Ollama server reachable"
+                    else:
+                        test_result["message"] = f"Ollama responded with status {resp.status_code}"
+                except Exception as e:
+                    # Try root endpoint
+                    try:
+                        resp = await client.get(f"{base_url}/")
+                        if resp.status_code == 200 and "Ollama is running" in resp.text:
+                            test_result["connected"] = True
+                            test_result["message"] = "Ollama server reachable (root endpoint)"
+                        else:
+                            test_result["message"] = f"Cannot reach Ollama: {str(e)}"
+                    except Exception as e2:
+                        test_result["message"] = f"Cannot reach Ollama: {str(e2)}"
+            else:
+                # Try OpenAI-compatible endpoints
+                try:
+                    resp = await client.get(f"{base_url}/v1/models")
+                    if resp.status_code == 200:
+                        test_result["connected"] = True
+                        test_result["message"] = "OpenAI-compatible server reachable"
+                    else:
+                        test_result["message"] = f"Server responded with status {resp.status_code}"
+                except Exception as e:
+                    try:
+                        resp = await client.get(f"{base_url}/models")
+                        if resp.status_code == 200:
+                            test_result["connected"] = True
+                            test_result["message"] = "LLM server reachable"
+                        else:
+                            test_result["message"] = f"Cannot reach server: {str(e)}"
+                    except Exception as e2:
+                        test_result["message"] = f"Cannot reach server: {str(e2)}"
+        
+        elapsed = (_time.time() - start) * 1000
+        test_result["latency_ms"] = round(elapsed, 2)
+        
+    except Exception as e:
+        test_result["message"] = f"Connection test failed: {str(e)}"
+        logger.error(f"Error testing LLM connection: {e}")
+    
+    # If connection test failed, return error
+    if not test_result["connected"]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Connection test failed: {test_result['message']}. Please verify the URL and ensure the LLM server is accessible."
+        )
+    
+    # Connection successful, save it
+    try:
+        from pathlib import Path
+        import json as _json
+        path = Path("config/llm_connections.json")
+        cfg = {"connections": []}
+        if path.exists():
+            with open(path, 'r') as f:
+                try:
+                    cfg = _json.load(f) or cfg
+                except Exception:
+                    pass
+        
+        # Remove existing connection with same ID if exists
+        cfg["connections"] = [c for c in cfg.get("connections", []) if c.get("id") != connection.id]
+        
+        # Add new connection
+        cfg["connections"].append(connection.dict())
+        
+        # Persist back
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, 'w') as f:
+            _json.dump(cfg, f, indent=2)
+        clear_settings_cache()
+        
+        return {
+            "success": True, 
+            "connection": connection.dict(),
+            "test_result": test_result
+        }
+    except Exception as e:
+        logger.error(f"Error creating llm connection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/llm-connections/{conn_id}")
 async def delete_llm_connection(conn_id: str) -> Dict[str, Any]:
     """Delete an LLM connection from llm_connections.json (no-op for default)."""

@@ -22,7 +22,7 @@
         "headers": {},
         "auth_token": "secret"
       },
-      "enabled": true,
+      "enabled": false,
       "description": null
     }
   ]

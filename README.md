@@ -1,6 +1,20 @@
-# AI Orchestrator Studio
+<div align="center">
+  <img src="AOS-2.png" alt="AI Orchestrator Studio" width="200"/>
+  
+  # AI Orchestrator Studio
+  
+  **A comprehensive web-based platform for orchestrating AI workflows, managing LLM connections, and building intelligent conversational applications.**
+  
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+  [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+  [![React 18.2+](https://img.shields.io/badge/react-18.2+-61dafb.svg)](https://reactjs.org/)
+  [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
+  
+</div>
 
-**AI Orchestrator Studio** is a comprehensive web-based platform for orchestrating AI workflows, managing LLM connections, and building intelligent conversational applications. It provides a full-stack solution with an intuitive React frontend and a powerful FastAPI backend.
+---
+
+**AI Orchestrator Studio** provides a full-stack solution with an intuitive React frontend and a powerful FastAPI backend.
 
 ---
 

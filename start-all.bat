@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo ZainOne Orchestrator Studio
+echo AI Orchestrator Studio
 echo ========================================
 echo.
 echo Starting Backend Server...

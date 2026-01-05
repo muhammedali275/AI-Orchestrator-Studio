@@ -25,9 +25,8 @@ class ChatRouter:
     """
     Routes chat requests based on routing profile.
     
-    Supports three routing profiles:
+    Supports two routing profiles:
     - direct_llm: Direct call to LLM server
-    - zain_agent: Route through external agent
     - tools_data: Use orchestration graph with tools and data sources
     """
     
@@ -141,8 +140,6 @@ class ChatRouter:
             # Route based on profile
             if routing_profile == "direct_llm":
                 result = await self._route_direct_llm(messages, model_id, metadata)
-            elif routing_profile == "zain_agent":
-                result = await self._route_zain_agent(message, metadata)
             elif routing_profile == "tools_data":
                 result = await self._route_tools_data(message, user_id, use_tools, metadata)
             else:
@@ -356,39 +353,6 @@ class ChatRouter:
             "tokens_in": tokens_in,
             "tokens_out": tokens_out
         }
-    
-    async def _route_zain_agent(
-        self,
-        message: str,
-        metadata: Optional[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """Route to external Zain agent."""
-        logger.info("[ChatRouter] Routing to Zain agent")
-        
-        # Get default agent configuration
-        agent_config = self.settings.get_agent("default")
-        if not agent_config:
-            raise ValueError("No default agent configured")
-        
-        # Create agent client and call
-        agent_client = ExternalAgentClient(self.settings)
-        try:
-            result = await agent_client.call(
-                agent_name="default",
-                prompt=message,
-                metadata=metadata or {}
-            )
-            
-            return {
-                "answer": result.get("response", "No response from agent"),
-                "metadata": {
-                    "routing_profile": "zain_agent",
-                    "agent_name": "default",
-                    **result.get("metadata", {})
-                }
-            }
-        finally:
-            await agent_client.close()
     
     async def _route_tools_data(
         self,

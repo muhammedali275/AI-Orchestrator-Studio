@@ -1,5 +1,5 @@
 """
-ZainOne Orchestrator Studio - Main FastAPI Application
+AI Orchestrator Studio - Main FastAPI Application
 
 Entry point for the orchestration backend.
 Uses Settings from config - NO hard-coded values.

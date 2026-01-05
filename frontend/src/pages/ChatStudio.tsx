@@ -281,11 +281,6 @@ const ChatStudio: React.FC = () => {
           description: 'Direct connection to LLM server without additional processing'
         },
         {
-          id: 'zain_agent',
-          name: 'Zain Agent',
-          description: 'Route through Zain orchestrator agent with data access'
-        },
-        {
           id: 'tools_data',
           name: 'Tools + Data',
           description: 'Full orchestration with tools, data sources, and reasoning'

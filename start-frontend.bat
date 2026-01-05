@@ -1,6 +1,6 @@
 @echo off
 setlocal ENABLEDELAYEDEXPANSION
-echo Starting ZainOne Orchestrator Studio Frontend...
+echo Starting AI Orchestrator Studio Frontend...
 
 REM Compute version from root package.json
 set "_PKG_JSON="

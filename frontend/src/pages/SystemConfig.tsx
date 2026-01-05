@@ -87,10 +87,6 @@ const SystemConfig: React.FC = () => {
 
   // External Agents Configuration
   const [agentsConfig, setAgentsConfig] = useState({
-    zain_agent_ip: 'localhost',
-    zain_agent_port: '8001',
-    zain_agent_path: '/execute',
-    zain_agent_token: '',
     custom_agent_ip: '',
     custom_agent_port: '',
     custom_agent_path: '',
@@ -204,10 +200,6 @@ const SystemConfig: React.FC = () => {
         MEMORY_ENABLED: dbConfig.memory_enabled,
         MEMORY_MAX_MESSAGES: dbConfig.memory_max_messages,
 
-        // External Agents
-        EXTERNAL_AGENT_BASE_URL: `http://${agentsConfig.zain_agent_ip}:${agentsConfig.zain_agent_port}`,
-        EXTERNAL_AGENT_AUTH_TOKEN: agentsConfig.zain_agent_token,
-
         // Data Sources
         DATASOURCE_BASE_URL: `http://${dataSourcesConfig.cubejs_ip}:${dataSourcesConfig.cubejs_port}`,
         DATASOURCE_AUTH_TOKEN: dataSourcesConfig.cubejs_token,
@@ -216,16 +208,8 @@ const SystemConfig: React.FC = () => {
       // Save to .env file
       await axios.post('http://localhost:8000/api/config/env', envData);
 
-      // Save agents configuration
-      const agentsData = {
-        'zain-agent': {
-          name: 'Zain Telecom Agent',
-          url: `http://${agentsConfig.zain_agent_ip}:${agentsConfig.zain_agent_port}`,
-          auth_token: agentsConfig.zain_agent_token,
-          timeout_seconds: 60,
-          enabled: true,
-        },
-      };
+      // Save agents configuration (only if custom agent is configured)
+      const agentsData: Record<string, any> = {};
 
       if (agentsConfig.custom_agent_ip && agentsConfig.custom_agent_port) {
         (agentsData as any)['custom-agent'] = {
@@ -829,69 +813,6 @@ const SystemConfig: React.FC = () => {
             External Agents Configuration
           </Typography>
 
-          {/* Zain Agent */}
-          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, mt: 2, mb: 2 }}>
-            Zain Telecom Agent
-          </Typography>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={4}>
-              <TextField
-                label="Agent IP / Hostname"
-                fullWidth
-                value={agentsConfig.zain_agent_ip}
-                onChange={(e) => setAgentsConfig({ ...agentsConfig, zain_agent_ip: e.target.value })}
-                placeholder="localhost or IP"
-                helperText="Zain agent server address"
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                label="Agent Port"
-                fullWidth
-                type="number"
-                value={agentsConfig.zain_agent_port}
-                onChange={(e) => setAgentsConfig({ ...agentsConfig, zain_agent_port: e.target.value })}
-                placeholder="8001"
-                helperText="Agent port"
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                label="Endpoint Path"
-                fullWidth
-                value={agentsConfig.zain_agent_path}
-                onChange={(e) => setAgentsConfig({ ...agentsConfig, zain_agent_path: e.target.value })}
-                placeholder="/execute"
-                helperText="API endpoint"
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                label="Auth Token"
-                fullWidth
-                type="password"
-                value={agentsConfig.zain_agent_token}
-                onChange={(e) => setAgentsConfig({ ...agentsConfig, zain_agent_token: e.target.value })}
-                placeholder="Optional"
-                helperText="Authentication token"
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <Card sx={{ background: 'rgba(102, 126, 234, 0.05)' }}>
-                <CardContent>
-                  <Typography variant="caption" color="text.secondary" gutterBottom display="block">
-                    Full Agent URL:
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontFamily: 'monospace', color: '#667eea', fontWeight: 600 }}>
-                    http://{agentsConfig.zain_agent_ip}:{agentsConfig.zain_agent_port}{agentsConfig.zain_agent_path}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          <Divider sx={{ my: 4 }} />
-
           {/* Custom Agent */}
           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
             Custom Agent (Optional)
@@ -914,15 +835,6 @@ const SystemConfig: React.FC = () => {
                 value={agentsConfig.custom_agent_port}
                 onChange={(e) => setAgentsConfig({ ...agentsConfig, custom_agent_port: e.target.value })}
                 placeholder="Optional"
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                label="Endpoint Path"
-                fullWidth
-                value={agentsConfig.custom_agent_path}
-                onChange={(e) => setAgentsConfig({ ...agentsConfig, custom_agent_path: e.target.value })}
-                placeholder="/api/execute"
               />
             </Grid>
             <Grid item xs={12}>

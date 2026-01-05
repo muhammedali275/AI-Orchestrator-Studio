@@ -80,17 +80,12 @@ class PromptProfileCreate(BaseModel):
 
 
 # Routing profile validation constants
-VALID_ROUTING_PROFILES = {"direct_llm", "zain_agent", "tools_data"}
+VALID_ROUTING_PROFILES = {"direct_llm", "tools_data"}
 ROUTING_PROFILE_INFO = {
     "direct_llm": {
         "id": "direct_llm",
         "name": "Direct LLM",
         "description": "Direct connection to LLM server without additional processing"
-    },
-    "zain_agent": {
-        "id": "zain_agent",
-        "name": "Zain Agent",
-        "description": "Route through Zain orchestrator agent with data access"
     },
     "tools_data": {
         "id": "tools_data",

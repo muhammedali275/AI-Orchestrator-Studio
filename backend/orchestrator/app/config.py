@@ -1,5 +1,5 @@
 """
-Configuration management for ZainOne Orchestrator Studio.
+Configuration management for AI Orchestrator Studio.
 
 All runtime connectivity comes from environment variables or .env file.
 NO hard-coded IPs, ports, URLs, or credentials.
@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     )
     
     # Application Settings
-    app_name: str = Field(default="ZainOne Orchestrator Studio", description="Application name")
+    app_name: str = Field(default="AI Orchestrator Studio", description="Application name")
     app_version: str = Field(default="1.0.0", description="Application version")
     debug: bool = Field(default=False, description="Debug mode")
     log_level: str = Field(default="INFO", description="Logging level")

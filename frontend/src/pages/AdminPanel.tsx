@@ -102,7 +102,7 @@ const AdminPanel: React.FC = () => {
     {
       id: '1',
       username: 'admin',
-      email: 'admin@zainone.com',
+      email: 'admin@example.com',
       role: 'Administrator',
       status: 'active',
       lastLogin: '2024-01-15 10:30:00',
@@ -110,7 +110,7 @@ const AdminPanel: React.FC = () => {
     {
       id: '2',
       username: 'developer',
-      email: 'dev@zainone.com',
+      email: 'dev@example.com',
       role: 'Developer',
       status: 'active',
       lastLogin: '2024-01-15 09:15:00',
@@ -118,7 +118,7 @@ const AdminPanel: React.FC = () => {
     {
       id: '3',
       username: 'viewer',
-      email: 'viewer@zainone.com',
+      email: 'viewer@example.com',
       role: 'Viewer',
       status: 'inactive',
       lastLogin: '2024-01-14 16:45:00',

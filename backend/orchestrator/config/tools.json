@@ -9,21 +9,6 @@
       },
       "enabled": true,
       "description": "Test HTTP tool"
-    },
-    {
-      "name": "zain_agent",
-      "type": "http_request",
-      "config": {
-        "endpoint": "",
-        "port": "",
-        "api_key": "",
-        "timeout": "30",
-        "base_url": "http://10.222.38.111:4000/cubejs-api/v1/load",
-        "headers": {},
-        "auth_token": "secret"
-      },
-      "enabled": false,
-      "description": null
     }
   ]
 }

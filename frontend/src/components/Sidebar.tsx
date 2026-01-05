@@ -145,16 +145,15 @@ const Sidebar: React.FC = () => {
             },
           }}
         >
-          <Box
-            component="img"
-            src="/company-logo.png"
-            alt="AI Orchestrator Studio Logo"
+          <Typography
+            variant="h5"
             sx={{
-              width: '160px',
-              height: 'auto',
-              maxHeight: '50px',
-              objectFit: 'contain',
-              filter: isDark ? 'brightness(1.1) drop-shadow(0 0 8px rgba(102, 126, 234, 0.4))' : 'brightness(1) drop-shadow(0 0 8px rgba(90, 103, 216, 0.3))',
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              letterSpacing: '0.5px',
+              filter: isDark ? 'brightness(1.2) drop-shadow(0 0 8px rgba(102, 126, 234, 0.4))' : 'drop-shadow(0 0 8px rgba(90, 103, 216, 0.3))',
               transition: 'all 0.3s ease-in-out',
               zIndex: 2,
               position: 'relative',
@@ -163,24 +162,21 @@ const Sidebar: React.FC = () => {
                 filter: isDark ? 'brightness(1.2) drop-shadow(0 0 12px rgba(102, 126, 234, 0.6))' : 'brightness(1.1) drop-shadow(0 0 12px rgba(90, 103, 216, 0.5))',
               },
             }}
-          />
+          >
+            AI Orchestrator
+          </Typography>
         </Box>
         <Typography
-          variant="h5"
+          variant="body2"
           sx={{
-            fontWeight: 700,
-            background: isDark
-              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-              : 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
+            color: 'text.secondary',
             textAlign: 'center',
             mb: 0.5,
-            fontSize: '1.3rem',
+            fontSize: '0.85rem',
+            opacity: 0.7,
           }}
         >
-          AI Orchestrator Studio
+          Studio
         </Typography>
         <Typography
           variant="caption"

@@ -1,52 +1,333 @@
-# AIpanel - Enterprise AI Orchestrator
+# AI Orchestrator Studio
 
-AIpanel is an enterprise-grade AI orchestration platform that enables seamless integration of LLMs, tools, and data sources for building powerful AI applications.
+**AI Orchestrator Studio** is a comprehensive web-based platform for orchestrating AI workflows, managing LLM connections, and building intelligent conversational applications. It provides a full-stack solution with an intuitive React frontend and a powerful FastAPI backend.
 
-## Features
+---
 
-- **LangGraph Orchestration**: State machine-based orchestration for complex AI workflows
-- **LangChain Tools**: Pre-built tools for data access, web search, and more
-- **Database-Backed Memory**: Persistent conversation history and caching
-- **Configurable Agents**: Create and configure agents with different capabilities
-- **Secure API**: JWT and API key authentication for secure access
-- **TLS Support**: Secure communication with TLS certificates
-- **Topology Management**: Visual configuration of orchestration flows
-- **Extensible Architecture**: Easy to add new tools, data sources, and capabilities
+## 🎯 Overview
 
-## Project Structure
+AI Orchestrator Studio enables organizations to:
+- Connect to multiple LLM providers (Ollama, OpenAI-compatible APIs, custom endpoints)
+- Build and test conversational AI workflows with different routing strategies
+- Manage tools, data sources, and external agents
+- Monitor system status and performance
+- Configure everything through an intuitive web interface
+
+---
+
+## 🏗️ Architecture
+
+### Frontend (React + TypeScript + Material-UI)
+Modern single-page application with 10+ functional pages:
+
+**Core Pages:**
+1. **Dashboard** (`/`) - System overview, quick stats, recent activity
+2. **Chat Studio** (`/chat-studio`) - Interactive chat interface with model selection and routing profiles
+3. **LLM Connections** (`/llm-connections`) - Manage external LLM server connections
+4. **Router Planner** (`/router-planner`) - Visual workflow designer and routing configuration
+5. **Data Sources** (`/datasources`) - Configure CubeJS and external data connections
+6. **Tools Configuration** (`/tools`) - Manage available tools and their settings
+7. **Agents Configuration** (`/agents`) - Configure external AI agents
+8. **System Configuration** (`/system-config`) - Centralized system settings
+9. **Upgrades** (`/upgrades`) - System updates and version management
+10. **Admin Panel** (`/admin`) - User management and system monitoring
+
+### Backend (FastAPI + Python)
+RESTful API server with comprehensive functionality:
+
+**API Endpoints:**
+- `/api/chat/ui/*` - Chat streaming and conversation management
+- `/api/config/*` - Configuration management (LLM, tools, datasources, agents)
+- `/api/admin/*` - Administrative functions
+- `/api/topology/*` - Workflow and routing management
+
+**Core Services:**
+- `ChatRouter` - Routes messages to appropriate LLM/agent/tool chain
+- `LLMClient` - Unified interface for multiple LLM providers
+- `ExternalAgentClient` - Integration with external AI agents
+- `CredentialManager` - Secure credential storage (SQLite)
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- **Python 3.9+** (backend)
+- **Node.js 16+** (frontend)
+- **Git** (optional, for updates)
+
+### Installation
+
+**1. Clone or extract the project:**
+```bash
+git clone <repository-url>
+cd AI-Orchestrator-Studio
+```
+
+**2. Start Backend:**
+```bash
+# Windows
+.\start-backend.bat
+
+# Linux/Mac
+./start-backend.sh
+```
+
+**3. Start Frontend (in new terminal):**
+```bash
+# Windows
+.\start-frontend.bat
+
+# Linux/Mac
+./start-frontend.sh
+```
+
+**4. Access the Application:**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+---
+
+## 📁 Project Structure
 
 ```
-app/
-├── api/                  # API endpoints
-│   ├── routes_chat.py    # Chat endpoints
-│   ├── routes_config.py  # Configuration endpoints
-│   ├── routes_certs.py   # Certificate management endpoints
-│   └── routes_topology.py # Topology management endpoints
-├── db/                   # Database models and session management
-│   ├── models.py         # SQLAlchemy models
-│   └── session.py        # Database session management
-├── llm/                  # LLM integration
-│   ├── client.py         # Generic LLM client
-│   └── prompts.py        # System prompt management
-├── orchestrator/         # Orchestration components
-│   ├── executor.py       # Flow execution
-│   ├── graph.py          # LangGraph orchestrator
-│   ├── langchain_tools.py # LangChain tools
-│   └── memory.py         # Conversation memory
-├── config.py             # Configuration settings
-├── main.py               # Application entry point
-└── security.py           # Authentication and authorization
+AI-Orchestrator-Studio/
+├── frontend/                  # React application
+│   ├── src/
+│   │   ├── pages/            # 10 main application pages
+│   │   ├── components/       # Reusable UI components
+│   │   ├── App.tsx           # Main app with routing
+│   │   └── index.tsx         # Entry point
+│   ├── public/               # Static assets
+│   └── package.json          # Frontend dependencies
+│
+├── backend/orchestrator/      # FastAPI application
+│   ├── app/
+│   │   ├── api/              # API route handlers
+│   │   │   ├── chat_ui.py    # Chat endpoints
+│   │   │   ├── config_management.py  # Configuration APIs
+│   │   │   └── admin.py      # Admin endpoints
+│   │   ├── services/         # Business logic
+│   │   │   ├── chat_router.py    # Message routing
+│   │   │   ├── llm_client.py     # LLM integrations
+│   │   │   └── credential_manager.py  # Security
+│   │   ├── config.py         # Settings management
+│   │   └── main.py           # FastAPI app entry
+│   ├── config/               # Configuration files
+│   │   ├── llm_connections.json   # LLM server configs
+│   │   ├── tools.json             # Tool definitions
+│   │   ├── datasources.json       # Data source configs
+│   │   └── agents.json            # Agent configurations
+│   └── .env                  # Environment variables
+│
+├── start-all.bat/sh          # Start both frontend + backend
+├── start-backend.bat/sh      # Start backend only
+├── start-frontend.bat/sh     # Start frontend only
+└── README.md                 # This file
 ```
 
-## Requirements
+---
 
-- Python 3.9+
-- FastAPI
-- SQLAlchemy
-- LangChain
-- LangGraph
-- Redis (optional, for memory and caching)
-- PostgreSQL (optional, for database)
+## 🔧 Configuration
+
+### LLM Connections
+Configure external LLM servers via GUI (`/llm-connections`) or JSON:
+
+```json
+{
+  "id": "llm-1234567890",
+  "name": "Production Ollama",
+  "base_url": "http://10.99.70.200:11434",
+  "model": "qwen2.5-72b",
+  "timeout": 120,
+  "max_tokens": 4096
+}
+```
+
+### Routing Profiles
+Two routing strategies available in Chat Studio:
+
+1. **Direct LLM** - Send messages directly to selected LLM
+2. **Tools + Data** - Full orchestration with tools, data sources, and reasoning
+
+### Environment Variables
+Key backend settings in `backend/orchestrator/.env`:
+
+```env
+APP_NAME=AI Orchestrator Studio
+DEBUG=True
+LOG_LEVEL=INFO
+API_HOST=0.0.0.0
+API_PORT=8000
+```
+
+---
+
+## 🌐 Sitemap
+
+### User Interface Navigation
+
+```
+AI Orchestrator Studio
+│
+├── 🏠 Dashboard (/)
+│   └── System overview, stats, quick actions
+│
+├── 💬 Chat Studio (/chat-studio)
+│   ├── Model Selection (dropdown with all LLM connections)
+│   ├── Routing Profile Selection (Direct LLM / Tools+Data)
+│   ├── Conversation Management
+│   └── Real-time Streaming Responses
+│
+├── 🔌 LLM Connections (/llm-connections)
+│   ├── Add New Connection
+│   ├── Test Connectivity
+│   ├── View Available Models
+│   └── Edit/Delete Connections
+│
+├── 🗺️ Router Planner (/router-planner)
+│   ├── Visual Workflow Designer
+│   ├── Routing Logic Configuration
+│   └── Topology Management
+│
+├── 📊 Data Sources (/datasources)
+│   ├── CubeJS Configuration
+│   ├── Custom API Endpoints
+│   └── Database Connections
+│
+├── 🛠️ Tools Configuration (/tools)
+│   ├── Enable/Disable Tools
+│   ├── Tool Settings
+│   └── Custom Tool Integration
+│
+├── 🤖 Agents Configuration (/agents)
+│   ├── External Agent URLs
+│   ├── Authentication Tokens
+│   └── Agent Capabilities
+│
+├── ⚙️ System Configuration (/system-config)
+│   ├── LLM Settings
+│   ├── Database Configuration
+│   ├── External Agents
+│   └── Data Sources
+│
+├── 📦 Upgrades (/upgrades)
+│   ├── Available Updates
+│   ├── Version History
+│   └── Rollback Options
+│
+└── 👤 Admin Panel (/admin)
+    ├── User Management
+    ├── System Metrics
+    ├── Feature Flags
+    └── Logs Viewer
+```
+
+### API Endpoints
+
+```
+Backend API (http://localhost:8000)
+│
+├── /api/chat/ui/
+│   ├── POST /send/stream          # Stream chat response
+│   ├── GET /conversations         # List conversations
+│   ├── GET /conversations/{id}    # Get conversation history
+│   └── GET /profiles              # Get routing profiles
+│
+├── /api/config/
+│   ├── POST /llm-connections      # Add LLM connection
+│   ├── GET /llm-connections       # List connections
+│   ├── GET /llm-connections/{id}/models  # Get models for connection
+│   ├── POST /tools                # Save tools config
+│   ├── POST /datasources          # Save datasources config
+│   └── POST /agents               # Save agents config
+│
+├── /api/admin/
+│   ├── GET /users                 # List users
+│   ├── GET /metrics               # System metrics
+│   └── GET /feature-flags         # Feature toggles
+│
+└── /docs                          # OpenAPI/Swagger documentation
+```
+
+---
+
+## 🔒 Security
+
+- **Credential Storage**: SQLite database (`credentials.db`) for secure credential management
+- **API Authentication**: Support for API keys and bearer tokens
+- **Environment Variables**: Sensitive data stored in `.env` file (not in version control)
+- **CORS**: Configured for frontend-backend communication
+
+---
+
+## 🧪 Testing
+
+### Chat Studio Testing
+1. Navigate to `/chat-studio`
+2. Select an LLM from the dropdown (format: `connection-name : model-name`)
+3. Choose routing profile ("Direct LLM" or "Tools + Data")
+4. Send a test message
+5. Verify streaming response appears correctly
+
+### LLM Connection Testing
+1. Go to `/llm-connections`
+2. Click "Add Connection"
+3. Enter server details (URL, model, etc.)
+4. Click "Save" - connection is automatically tested
+5. Check for success message with latency
+6. Verify models appear in Chat Studio dropdown
+
+---
+
+## 📦 Production Deployment
+
+### RHEL 9 / Linux Production Setup
+See deployment scripts:
+- `deploy-to-rhel9.sh` - Full automated deployment
+- `start-all-universal.sh` - Cross-platform startup script
+
+### Docker (Future)
+Docker support planned for future releases.
+
+---
+
+## 🛠️ Development
+
+### Frontend Development
+```bash
+cd frontend
+npm install
+npm start          # Development server on port 3000
+npm run build      # Production build
+```
+
+### Backend Development
+```bash
+cd backend/orchestrator
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+---
+
+## 📝 License
+
+Copyright © 2025 AI Orchestrator Studio
+
+---
+
+## 🤝 Support
+
+For issues, questions, or contributions:
+- Check the `/docs` endpoint for API documentation
+- Review configuration files in `backend/orchestrator/config/`
+- Ensure all services are running (`start-all.bat/sh`)
+
+---
+
+**Built with ❤️ using React, TypeScript, FastAPI, and Material-UI**
 
 ## Installation
 

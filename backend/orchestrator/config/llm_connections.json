@@ -1,0 +1,15 @@
+{
+  "connections": [
+    {
+      "id": "default",
+      "name": "Default LLM",
+      "base_url": "http://localhost:11434",
+      "model": "ollama:llama2",
+      "api_key": null,
+      "timeout": 120,
+      "max_tokens": 2048,
+      "temperature": 0.7,
+      "is_local": true
+    }
+  ]
+}

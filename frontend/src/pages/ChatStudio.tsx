@@ -71,6 +71,9 @@ interface Conversation {
 interface Model {
   id: string;
   name?: string;
+  connection_id?: string;
+  connection_name?: string;
+  model_id?: string;
 }
 
 interface RoutingProfile {
@@ -194,55 +197,71 @@ const ChatStudio: React.FC = () => {
 
   const loadModels = async () => {
     try {
-      console.log('[ChatStudio] Fetching models from:', `${API_BASE_URL}/api/chat/ui/models`);
-      // Use axios with dynamic timeout from backend
-      const response = await axios.get(`${API_BASE_URL}/api/chat/ui/models`, {
-        // Limit model discovery timeout to 15s so UI remains responsive
-        timeout: 15000,
-      });
-      const data = response.data;
-      console.log('[ChatStudio] Models response:', data);
+      console.log('[ChatStudio] Fetching LLM connections...');
       
-      // Update LLM connectivity status
-      setLlmStatus({ source: data.source, server_url: data.server_url, error: data.error });
-
-      if (data.success && data.models && data.models.length > 0) {
-        setModels(data.models);
-        if (data.default_model) {
-          setSelectedModel(data.default_model);
-        } else if (data.models.length > 0) {
-          setSelectedModel(data.models[0].id);
+      // First, get all LLM connections
+      const connectionsResp = await axios.get(`${API_BASE_URL}/api/config/llm-connections`, {
+        timeout: 10000,
+      });
+      
+      const connections = connectionsResp.data?.connections || [];
+      console.log('[ChatStudio] Found connections:', connections.length);
+      
+      if (connections.length === 0) {
+        setError('No LLM connections configured. Go to LLM Connections to add one.');
+        setModels([]);
+        return;
+      }
+      
+      // Fetch models from all connections
+      const allModels: Model[] = [];
+      let defaultModel = '';
+      
+      for (const conn of connections) {
+        try {
+          console.log(`[ChatStudio] Fetching models from connection: ${conn.name}`);
+          const modelsResp = await axios.get(`${API_BASE_URL}/api/config/llm-connections/${conn.id}/models`, {
+            timeout: 15000,
+          });
+          
+          if (modelsResp.data?.success && modelsResp.data?.models) {
+            // Add connection name prefix to model IDs for clarity
+            modelsResp.data.models.forEach((model: any) => {
+              allModels.push({
+                id: `${conn.id}:${model.id}`,
+                name: `${conn.name} - ${model.name || model.id}`,
+                connection_id: conn.id,
+                connection_name: conn.name,
+                model_id: model.id
+              });
+            });
+            
+            // Use first connection's first model as default
+            if (!defaultModel && modelsResp.data.models.length > 0) {
+              defaultModel = `${conn.id}:${modelsResp.data.models[0].id}`;
+            }
+          }
+        } catch (err) {
+          console.warn(`[ChatStudio] Failed to fetch models from ${conn.name}:`, err);
+        }
+      }
+      
+      console.log('[ChatStudio] Total models loaded:', allModels.length);
+      
+      if (allModels.length > 0) {
+        setModels(allModels);
+        if (defaultModel) {
+          setSelectedModel(defaultModel);
         }
         setError(null);
       } else {
-        // Handle different error scenarios
-        let errorMessage = data.message || 'No LLM models available.';
-        
-        // Add helpful link to configuration page
-        if (data.error === 'not_configured' || data.error === 'connection_error') {
-          errorMessage += ' Go to Settings > LLM Configuration to set up your LLM connection.';
-        } else if (data.error === 'no_models') {
-          errorMessage += ' Please install models on your LLM server.';
-        } else if (data.error === 'timeout' && data.default_model) {
-          errorMessage += ` Using default model: ${data.default_model}.`;
-        }
-        
-        setError(errorMessage);
-        // If backend provided a default model fallback, surface it
-        if (data.models && data.models.length > 0) {
-          setModels(data.models);
-          setSelectedModel(data.default_model || data.models[0].id);
-        } else {
-          setModels([]);
-        }
-        console.warn('[ChatStudio] No models available:', data);
+        setError('No models available from configured LLM connections. Check if your LLM servers are running.');
+        setModels([]);
       }
+      
     } catch (err: any) {
-      console.error('Error loading models:', err);
-      const errorMsg = err.code === 'ECONNABORTED' 
-        ? 'Connection to LLM server timed out (15s). Server may be offline or very slow.'
-        : 'Failed to connect to backend server. Please check if the backend is running on port 8000.';
-      setError(errorMsg);
+      console.error('[ChatStudio] Error loading models:', err);
+      setError(`Failed to load models: ${err.message}. Check your LLM connections.`);
       setModels([]);
     }
   };
@@ -436,22 +455,41 @@ const ChatStudio: React.FC = () => {
   };
   const handleSendMessage = async (message: string) => {
     if (!message.trim()) return;
+    
+    if (!selectedModel) {
+      setError('Please select a model first. Go to LLM Connections to add one.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
+      // Parse connection_id:model_id format
+      let connectionId = '';
+      let modelId = selectedModel;
+      
+      if (selectedModel.includes(':')) {
+        const parts = selectedModel.split(':');
+        connectionId = parts[0];
+        modelId = parts.slice(1).join(':'); // In case model ID has colons
+      }
+      
+      console.log('[ChatStudio] Sending message with:', { connectionId, modelId, routing: selectedProfile });
+
       // Prefer SSE streaming for better UX
       const payload = {
         conversation_id: selectedConversation?.id,
         message: message,
-        model_id: selectedModel,
+        model_id: modelId,
+        connection_id: connectionId || undefined,
         routing_profile: selectedProfile,
         use_memory: useMemory,
         use_tools: useTools,
       };
 
       const streamUrl = `${API_BASE_URL}/api/chat/ui/send/stream`;
+      console.log('[ChatStudio] Streaming to:', streamUrl, payload);
 
       // Create a temporary assistant message to append streamed tokens
       const tempId = `temp_${Date.now()}`;
@@ -627,6 +665,7 @@ const ChatStudio: React.FC = () => {
             </Select>
           </FormControl>
 
+          {/* Microphone disabled - text chat only
           <Tooltip title={listening ? 'Stop voice input' : 'Start voice input'}>
             <span>
               <IconButton size="small" onClick={() => (listening ? stopListening() : startListening())} color={listening ? 'error' : 'primary'}>
@@ -634,6 +673,7 @@ const ChatStudio: React.FC = () => {
               </IconButton>
             </span>
           </Tooltip>
+          */}
 
           {/* LLM Connectivity Badge */}
           {llmStatus && (

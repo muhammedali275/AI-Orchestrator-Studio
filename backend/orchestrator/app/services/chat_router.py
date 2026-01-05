@@ -42,6 +42,20 @@ class ChatRouter:
         self.llm_client = LLMClient(settings)
         self.conversation_memory = ConversationMemory(settings)
 
+    def _get_connection_by_id(self, connection_id: str) -> Dict[str, Any]:
+        """Get specific connection by ID from llm_connections."""
+        try:
+            conns = getattr(self.settings, 'llm_connections', {}) or {}
+            if connection_id in conns:
+                cfg = conns[connection_id]
+                return {"base_url": getattr(cfg, 'base_url', ''), "api_key": getattr(cfg, 'api_key', None)}
+        except Exception:
+            pass
+        # Fallback to default
+        if getattr(self.settings, 'llm_base_url', None):
+            return {"base_url": self.settings.llm_base_url, "api_key": getattr(self.settings, 'llm_api_key', None)}
+        return {"base_url": "http://localhost:11434", "api_key": None}
+    
     def _select_connection_for_model(self, model_id: Optional[str]) -> Dict[str, Any]:
         """Select base_url/api_key based on model provider and configured connections."""
         try:
@@ -182,6 +196,7 @@ class ChatRouter:
         message: str,
         conversation_id: Optional[str] = None,
         model_id: Optional[str] = None,
+        connection_id: Optional[str] = None,
         routing_profile: str = "direct_llm",
         use_memory: bool = True,
         user_id: Optional[str] = None,
@@ -218,7 +233,11 @@ class ChatRouter:
             # Only direct_llm supports streaming currently
             if routing_profile == "direct_llm":
                 full_response = ""
-                sel = self._select_connection_for_model(model_id)
+                # Use specific connection if provided, otherwise select based on model
+                if connection_id:
+                    sel = self._get_connection_by_id(connection_id)
+                else:
+                    sel = self._select_connection_for_model(model_id)
                 tmp_settings = self._make_temp_settings(sel["base_url"], sel.get("api_key"))
                 client = LLMClient(tmp_settings)
                 async for chunk in client.stream(messages=messages, model=model_id):

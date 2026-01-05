@@ -485,11 +485,18 @@ const CredentialsSecurity: React.FC = () => {
                   formData.type === 'api_key' ? 'API Key' :
                   formData.type === 'bearer_token' ? 'Bearer Token' :
                   formData.type === 'ssh' ? 'SSH Private Key' :
+                  formData.type === 'https_cert' ? 'Certificate Content' :
+                  formData.type === 'ip_allowlist' ? 'Comma-separated IP addresses' :
+                  formData.type === 'token' ? 'Authentication Token (optional for local LLMs)' :
                   'Secret Value'
                 }
-                required={!editingCredential}
-                multiline={formData.type === 'ssh'}
-                rows={formData.type === 'ssh' ? 4 : 1}
+                required={!editingCredential && formData.type !== 'token'}
+                multiline={formData.type === 'ssh' || formData.type === 'https_cert' || formData.type === 'ip_allowlist'}
+                rows={
+                  formData.type === 'ssh' || 
+                  formData.type === 'https_cert' ? 4 : 
+                  formData.type === 'ip_allowlist' ? 2 : 1
+                }
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -502,7 +509,11 @@ const CredentialsSecurity: React.FC = () => {
                     </InputAdornment>
                   ),
                 }}
-                helperText={editingCredential ? 'Leave empty to keep the current secret' : 'This will be encrypted before storage'}
+                helperText={
+                  editingCredential ? 'Leave empty to keep the current secret' : 
+                  formData.type === 'token' ? 'Optional for local LLM connections' :
+                  'This will be encrypted before storage'
+                }
               />
             </Grid>
             <Grid item xs={12}>

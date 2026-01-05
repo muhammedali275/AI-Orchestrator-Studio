@@ -34,6 +34,7 @@ class SendMessageRequest(BaseModel):
     conversation_id: Optional[str] = Field(None, description="Conversation ID (creates new if not provided)")
     message: str = Field(..., description="User message")
     model_id: Optional[str] = Field(None, description="Model to use")
+    connection_id: Optional[str] = Field(None, description="LLM connection ID to use")
     routing_profile: str = Field(default="direct_llm", description="Routing profile")
     use_memory: bool = Field(default=True, description="Use conversation memory")
     use_tools: bool = Field(default=False, description="Enable tools")
@@ -280,6 +281,10 @@ async def send_message_stream(
             )
         
         # Get or create conversation
+        conversation_id = None
+        user_id = "default"
+        model_id_to_use = request.model_id
+        
         if request.conversation_id:
             conversation = db.query(Conversation).filter(
                 Conversation.id == request.conversation_id,
@@ -292,6 +297,10 @@ async def send_message_stream(
                     detail="Conversation not found",
                     error_code=ErrorCode.CONVERSATION_NOT_FOUND
                 )
+            conversation_id = conversation.id
+            user_id = conversation.user_id
+            if not model_id_to_use:
+                model_id_to_use = conversation.model_id
         else:
             conversation = Conversation(
                 title=f"Chat {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
@@ -302,10 +311,12 @@ async def send_message_stream(
             db.add(conversation)
             db.commit()
             db.refresh(conversation)
+            conversation_id = conversation.id
+            user_id = conversation.user_id
         
         # Store user message
         user_message = Message(
-            conversation_id=conversation.id,
+            conversation_id=conversation_id,
             role="user",
             content=request.message,
             metadata=request.metadata or {}
@@ -320,21 +331,21 @@ async def send_message_stream(
             try:
                 # Standardize model ID before streaming
                 standardized_model_id = None
-                if request.model_id or conversation.model_id:
+                if model_id_to_use:
                     try:
-                        raw_model = request.model_id or conversation.model_id
-                        standardized_model_id = ModelParser.standardize(raw_model, use_full=True)
+                        standardized_model_id = ModelParser.standardize(model_id_to_use, use_full=True)
                     except Exception:
-                        standardized_model_id = request.model_id or conversation.model_id
+                        standardized_model_id = model_id_to_use
 
                 # Stream tokens from router and emit SSE frames
                 async for chunk in router_service.stream_message(
                     message=request.message,
-                    conversation_id=conversation.id,
+                    conversation_id=conversation_id,
                     model_id=standardized_model_id,
+                    connection_id=request.connection_id,
                     routing_profile=request.routing_profile,
                     use_memory=request.use_memory,
-                    user_id=conversation.user_id,
+                    user_id=user_id,
                     metadata=request.metadata
                 ):
                     # Normalize chunk to string
@@ -344,7 +355,7 @@ async def send_message_stream(
                 
                 # Final event to signal completion
                 yield "event: done\n"
-                yield f"data: {{\"conversation_id\": \"{conversation.id}\", \"model_id\": \"{standardized_model_id}\"}}\n\n"
+                yield f"data: {{\"conversation_id\": \"{conversation_id}\", \"model_id\": \"{standardized_model_id}\"}}\n\n"
             finally:
                 await router_service.close()
         

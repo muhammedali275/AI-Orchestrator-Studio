@@ -603,6 +603,114 @@ async def create_llm_connection(connection: LLMConnection) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/llm-connections/{conn_id}/models")
+async def get_llm_connection_models(conn_id: str, settings: Settings = Depends(get_settings)) -> Dict[str, Any]:
+    """Fetch available models from a specific LLM connection."""
+    import httpx as _httpx
+    
+    # Resolve connection
+    target: Optional[LLMConnection] = None
+    try:
+        if conn_id in settings.llm_connections:
+            cfg = settings.llm_connections[conn_id]
+            target = LLMConnection(**cfg.dict())
+    except Exception:
+        pass
+
+    if target is None:
+        from pathlib import Path
+        import json as _json
+        path = Path("config/llm_connections.json")
+        if path.exists():
+            try:
+                with open(path, 'r') as f:
+                    data = _json.load(f) or {}
+                    for c in data.get("connections", []):
+                        if c.get("id") == conn_id:
+                            try:
+                                target = LLMConnection(**c)
+                                break
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"LLM connection '{conn_id}' not found")
+
+    base_url = target.base_url.rstrip('/')
+    headers = {"Content-Type": "application/json"}
+    if target.api_key:
+        headers["Authorization"] = f"Bearer {target.api_key}"
+
+    def detect_provider(url: str) -> str:
+        u = (url or "").lower()
+        if "ollama" in u or "11434" in u:
+            return "ollama"
+        if "openai" in u or "/v1" in u:
+            return "openai"
+        return "unknown"
+
+    provider = detect_provider(base_url)
+    models = []
+
+    try:
+        async with _httpx.AsyncClient(timeout=target.timeout or 10, headers=headers) as client:
+            if provider == "ollama":
+                # Ollama: GET /api/tags
+                resp = await client.get(f"{base_url}/api/tags")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for m in data.get("models", []):
+                        models.append({
+                            "id": m.get("name", ""),
+                            "name": m.get("name", ""),
+                            "size": m.get("size"),
+                            "modified_at": m.get("modified_at")
+                        })
+            else:
+                # OpenAI-compatible: GET /v1/models or /models
+                try:
+                    resp = await client.get(f"{base_url}/v1/models")
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        for m in data.get("data", []):
+                            models.append({
+                                "id": m.get("id", ""),
+                                "name": m.get("id", ""),
+                                "owned_by": m.get("owned_by")
+                            })
+                except:
+                    # Fallback to /models
+                    resp = await client.get(f"{base_url}/models")
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if isinstance(data, list):
+                            for m in data:
+                                models.append({
+                                    "id": m.get("id", "") or m.get("name", ""),
+                                    "name": m.get("name", "") or m.get("id", "")
+                                })
+                        elif isinstance(data, dict) and "data" in data:
+                            for m in data["data"]:
+                                models.append({
+                                    "id": m.get("id", "") or m.get("name", ""),
+                                    "name": m.get("name", "") or m.get("id", "")
+                                })
+
+        return {
+            "success": True,
+            "connection_id": conn_id,
+            "connection_name": target.name,
+            "provider": provider,
+            "models": models,
+            "total": len(models)
+        }
+    except Exception as e:
+        logger.error(f"Error fetching models from {conn_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch models: {str(e)}")
+
+
 @router.delete("/llm-connections/{conn_id}")
 async def delete_llm_connection(conn_id: str) -> Dict[str, Any]:
     """Delete an LLM connection from llm_connections.json (no-op for default)."""

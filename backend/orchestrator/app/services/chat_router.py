@@ -110,7 +110,7 @@ class ChatRouter:
             message: User message
             conversation_id: Conversation ID for context
             model_id: Model to use
-            routing_profile: Routing profile (direct_llm, zain_agent, tools_data)
+            routing_profile: Routing profile (direct_llm, tools_data)
             use_memory: Whether to use conversation memory
             use_tools: Whether to enable tools
             user_id: User identifier

@@ -2,7 +2,7 @@
 Agent Registry - Factory for LangChain Agents.
 
 Builds LangChain-compatible agents using config from config_service.
-Defines agents by name (e.g., "zain_agent").
+Defines agents by name for external integrations.
 """
 
 import logging

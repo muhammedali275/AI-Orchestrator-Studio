@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     )
     
     # External Agent Configuration
-    external_agent_base_url: Optional[str] = Field(default=None, description="External agent base URL (e.g., zain_agent)")
+    external_agent_base_url: Optional[str] = Field(default=None, description="External agent base URL")
     external_agent_auth_token: Optional[str] = Field(default=None, description="External agent authentication token")
     external_agent_timeout_seconds: int = Field(default=30, description="External agent request timeout")
     

@@ -1,5 +1,5 @@
 """
-External Agent Client - Interface for external agents (e.g., zain_agent).
+External Agent Client - Interface for external AI agents.
 
 Uses Settings for configuration - no hard-coded endpoints.
 Supports multiple agents dynamically configured.

@@ -1,13 +1,13 @@
 {
   "agents": [
     {
-      "name": "zain_agent",
+      "name": "example_agent",
       "url": "http://localhost:8001",
       "auth_token": null,
       "timeout_seconds": 30,
       "enabled": true,
       "metadata": {
-        "description": "Main Zain agent for customer service",
+        "description": "Example external agent",
         "version": "1.0.0",
         "capabilities": ["chat", "analysis", "recommendations"]
       }

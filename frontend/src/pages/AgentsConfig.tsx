@@ -472,7 +472,7 @@ const AgentsConfig: React.FC = () => {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 disabled={!!editingAgent}
-                placeholder="zain_agent"
+                placeholder="my_agent"
               />
             </Grid>
             <Grid item xs={12} md={6}>

@@ -8,8 +8,7 @@ import {
   useTheme,
 } from '@mui/material';
 import {
-  Send as SendIcon,
-  AttachFile as AttachFileIcon,
+  Send as SendIcon
 } from '@mui/icons-material';
 
 interface ChatInputProps {

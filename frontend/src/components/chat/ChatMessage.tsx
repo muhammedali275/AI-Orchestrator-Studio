@@ -33,7 +33,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const isDark = theme.palette.mode === 'dark';
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
-  const isTool = message.role === 'tool';
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);

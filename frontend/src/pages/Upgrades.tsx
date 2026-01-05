@@ -45,10 +45,8 @@ import {
   Code as CodeIcon,
   Language as LanguageIcon,
   Memory as MemoryIcon,
-  ExpandMore as ExpandMoreIcon,
   Visibility as VisibilityIcon,
-  Search as SearchIcon,
-  FilterList as FilterListIcon
+  Search as SearchIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 

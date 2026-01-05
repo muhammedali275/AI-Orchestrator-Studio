@@ -145,15 +145,16 @@ const Sidebar: React.FC = () => {
             },
           }}
         >
-          <Typography
-            variant="h5"
+          <Box
+            component="img"
+            src="/AOS.png"
+            alt="AI Orchestrator Studio"
             sx={{
-              fontWeight: 700,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              letterSpacing: '0.5px',
-              filter: isDark ? 'brightness(1.2) drop-shadow(0 0 8px rgba(102, 126, 234, 0.4))' : 'drop-shadow(0 0 8px rgba(90, 103, 216, 0.3))',
+              width: '180px',
+              height: 'auto',
+              maxHeight: '60px',
+              objectFit: 'contain',
+              filter: isDark ? 'brightness(1.1) drop-shadow(0 0 8px rgba(102, 126, 234, 0.4))' : 'brightness(1) drop-shadow(0 0 8px rgba(90, 103, 216, 0.3))',
               transition: 'all 0.3s ease-in-out',
               zIndex: 2,
               position: 'relative',
@@ -162,9 +163,7 @@ const Sidebar: React.FC = () => {
                 filter: isDark ? 'brightness(1.2) drop-shadow(0 0 12px rgba(102, 126, 234, 0.6))' : 'brightness(1.1) drop-shadow(0 0 12px rgba(90, 103, 216, 0.5))',
               },
             }}
-          >
-            AI Orchestrator
-          </Typography>
+          />
         </Box>
         <Typography
           variant="body2"

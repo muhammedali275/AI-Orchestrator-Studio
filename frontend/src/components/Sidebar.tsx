@@ -147,12 +147,12 @@ const Sidebar: React.FC = () => {
         >
           <Box
             component="img"
-            src="/AOS-trans.png"
+            src="/AOS-2.png"
             alt="AI Orchestrator Studio"
             sx={{
               width: '100%',
-              maxWidth: '200px',
-              height: 'auto',
+              height: '100%',
+              padding: '8px',
               objectFit: 'contain',
               filter: isDark ? 'drop-shadow(0 0 8px rgba(102, 126, 234, 0.3))' : 'drop-shadow(0 0 6px rgba(90, 103, 216, 0.2))',
               transition: 'all 0.3s ease-in-out',

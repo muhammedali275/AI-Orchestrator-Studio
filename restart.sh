@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "========================================"
-echo "Restarting ZainOne Orchestrator Studio"
+echo "Restarting exampleOne Orchestrator Studio"
 echo "========================================"
 echo ""
 

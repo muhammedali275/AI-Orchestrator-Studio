@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ZainOne Orchestrator Studio - RHEL9 Production Deployment Script
+# exampleOne Orchestrator Studio - RHEL9 Production Deployment Script
 # This script automates the deployment process for RHEL9 servers
 
 set -e  # Exit on any error
@@ -13,13 +13,13 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration variables
-APP_NAME="zainone-orchestrator-studio"
-APP_USER="zainone"
-DB_NAME="zainone_orchestrator"
-DB_USER="zainone_user"
+APP_NAME="exampleone-orchestrator-studio"
+APP_USER="exampleone"
+DB_NAME="exampleone_orchestrator"
+DB_USER="exampleone_user"
 DOMAIN_NAME=""
 SSL_EMAIL=""
-GITHUB_REPO="https://github.com/your-repo/zainone-orchestrator-studio.git"
+GITHUB_REPO="https://github.com/your-repo/exampleone-orchestrator-studio.git"
 
 # Functions
 log_info() {
@@ -217,9 +217,9 @@ create_systemd_services() {
     log_info "Creating systemd services..."
 
     # Backend service
-    cat > /etc/systemd/system/zainone-backend.service << EOF
+    cat > /etc/systemd/system/exampleone-backend.service << EOF
 [Unit]
-Description=ZainOne Orchestrator Backend
+Description=exampleOne Orchestrator Backend
 After=network.target postgresql.service redis.service
 
 [Service]
@@ -236,9 +236,9 @@ WantedBy=multi-user.target
 EOF
 
     # Frontend service
-    cat > /etc/systemd/system/zainone-frontend.service << EOF
+    cat > /etc/systemd/system/exampleone-frontend.service << EOF
 [Unit]
-Description=ZainOne Orchestrator Frontend
+Description=exampleOne Orchestrator Frontend
 After=network.target
 
 [Service]
@@ -254,8 +254,8 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    systemctl enable zainone-backend
-    systemctl enable zainone-frontend
+    systemctl enable exampleone-backend
+    systemctl enable exampleone-frontend
 
     log_success "Systemd services created"
 }
@@ -263,9 +263,9 @@ EOF
 configure_nginx() {
     log_info "Configuring Nginx..."
 
-    cat > /etc/nginx/conf.d/zainone.conf << EOF
+    cat > /etc/nginx/conf.d/exampleone.conf << EOF
 # Upstream backend servers
-upstream zainone_backend {
+upstream exampleone_backend {
     server 127.0.0.1:8000;
 }
 
@@ -310,7 +310,7 @@ server {
 
     # Backend API
     location /api/ {
-        proxy_pass http://zainone_backend;
+        proxy_pass http://exampleone_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -371,8 +371,8 @@ configure_firewall() {
 start_services() {
     log_info "Starting services..."
 
-    systemctl start zainone-backend
-    systemctl start zainone-frontend
+    systemctl start exampleone-backend
+    systemctl start exampleone-frontend
 
     log_success "Services started"
 }
@@ -380,7 +380,7 @@ start_services() {
 create_backup_script() {
     log_info "Creating backup script..."
 
-    cat > /usr/local/bin/backup-zainone.sh << EOF
+    cat > /usr/local/bin/backup-exampleone.sh << EOF
 #!/bin/bash
 BACKUP_DIR="/home/$APP_USER/backups"
 DATE=\$(date +%Y%m%d_%H%M%S)
@@ -402,10 +402,10 @@ find \$BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
 echo "Backup completed: \$DATE"
 EOF
 
-    chmod +x /usr/local/bin/backup-zainone.sh
+    chmod +x /usr/local/bin/backup-exampleone.sh
 
     # Add to cron for daily backups at 2 AM
-    crontab -l 2>/dev/null | { cat; echo "0 2 * * * /usr/local/bin/backup-zainone.sh"; } | crontab -
+    crontab -l 2>/dev/null | { cat; echo "0 2 * * * /usr/local/bin/backup-exampleone.sh"; } | crontab -
 
     log_success "Backup script created and scheduled"
 }
@@ -414,13 +414,13 @@ verify_deployment() {
     log_info "Verifying deployment..."
 
     # Check service status
-    if systemctl is-active --quiet zainone-backend; then
+    if systemctl is-active --quiet exampleone-backend; then
         log_success "Backend service is running"
     else
         log_error "Backend service is not running"
     fi
 
-    if systemctl is-active --quiet zainone-frontend; then
+    if systemctl is-active --quiet exampleone-frontend; then
         log_success "Frontend service is running"
     else
         log_error "Frontend service is not running"
@@ -444,7 +444,7 @@ print_completion_message() {
     log_success "Deployment completed successfully!"
     echo
     echo "=================================================================="
-    echo "ZainOne Orchestrator Studio has been deployed to RHEL9"
+    echo "exampleOne Orchestrator Studio has been deployed to RHEL9"
     echo "=================================================================="
     echo
     echo "Application URLs:"
@@ -452,13 +452,13 @@ print_completion_message() {
     echo "  API Docs:  https://$DOMAIN_NAME/docs"
     echo
     echo "Service Management:"
-    echo "  Start services:   systemctl start zainone-backend zainone-frontend"
-    echo "  Stop services:    systemctl stop zainone-backend zainone-frontend"
-    echo "  Restart services: systemctl restart zainone-backend zainone-frontend"
-    echo "  View logs:        journalctl -u zainone-backend -f"
+    echo "  Start services:   systemctl start exampleone-backend exampleone-frontend"
+    echo "  Stop services:    systemctl stop exampleone-backend exampleone-frontend"
+    echo "  Restart services: systemctl restart exampleone-backend exampleone-frontend"
+    echo "  View logs:        journalctl -u exampleone-backend -f"
     echo
     echo "Backup:"
-    echo "  Manual backup: /usr/local/bin/backup-zainone.sh"
+    echo "  Manual backup: /usr/local/bin/backup-exampleone.sh"
     echo "  Automatic daily backups at 2 AM"
     echo
     echo "Next Steps:"
@@ -472,7 +472,7 @@ print_completion_message() {
 
 # Main execution
 main() {
-    log_info "Starting ZainOne Orchestrator Studio deployment on RHEL9"
+    log_info "Starting exampleOne Orchestrator Studio deployment on RHEL9"
 
     check_root
     get_user_input

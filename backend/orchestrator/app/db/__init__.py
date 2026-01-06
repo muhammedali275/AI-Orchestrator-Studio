@@ -1,5 +1,5 @@
 """
-Database package for ZainOne Orchestrator Studio.
+Database package for exampleOne Orchestrator Studio.
 
 Provides database models and connection management.
 """

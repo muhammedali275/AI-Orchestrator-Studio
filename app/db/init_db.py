@@ -195,7 +195,7 @@ def add_default_agents(db: Session) -> None:
     # Add default agents
     agents = [
         Agent(
-            name="zain_agent",
+            name="example_agent",
             description="Default agent for general queries",
             system_prompt=(
                 "You are a helpful AI assistant that provides accurate and useful information. "

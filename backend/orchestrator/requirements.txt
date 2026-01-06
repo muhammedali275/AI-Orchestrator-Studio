@@ -1,4 +1,4 @@
-# ZainOne Orchestrator Studio - Python Dependencies
+# exampleOne Orchestrator Studio - Python Dependencies
 
 # Core Framework
 fastapi==0.104.1

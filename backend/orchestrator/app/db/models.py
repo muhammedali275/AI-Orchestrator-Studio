@@ -1,5 +1,5 @@
 """
-Database models for ZainOne Orchestrator Studio.
+Database models for exampleOne Orchestrator Studio.
 
 Defines SQLAlchemy models for credential storage, conversations, messages, and chat metrics.
 """
@@ -138,7 +138,7 @@ class Conversation(Base):
     # Model and routing configuration
     model_id = Column(String(255), nullable=True)
     routing_profile = Column(String(50), nullable=False, default="direct_llm")
-    # Valid routing profiles: direct_llm, zain_agent, tools_data
+    # Valid routing profiles: direct_llm, example_agent, tools_data
     
     # Optional summary for quick display
     summary = Column(Text, nullable=True)

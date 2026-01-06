@@ -1,5 +1,5 @@
 """
-Services package for ZainOne Orchestrator Studio.
+Services package for exampleOne Orchestrator Studio.
 
 Provides business logic and service layer implementations.
 """

@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "========================================"
-echo "ZainOne Orchestrator Studio Status"
+echo "exampleOne Orchestrator Studio Status"
 echo "========================================"
 echo ""
 

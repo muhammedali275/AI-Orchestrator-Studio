@@ -1,4 +1,4 @@
-# ZainOne Orchestrator Studio - Backend
+# exampleOne Orchestrator Studio - Backend
 
 A modular, graph-based orchestration backend for AI agents and tools.
 
@@ -17,7 +17,7 @@ Planner (decompose complex tasks)
   ↓
 Execution Layer:
   - LLM Agent
-  - External Agent (e.g., zain_agent)
+  - External Agent (e.g., example_agent)
   - Tool Executor
   - Grounding/RAG
   ↓

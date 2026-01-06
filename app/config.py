@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     )
     
     # LLM Settings
-    DEFAULT_AGENT_NAME: str = Field(default="zain_agent", description="Default agent name")
+    DEFAULT_AGENT_NAME: str = Field(default="example_agent", description="Default agent name")
     LLM_BASE_URL: Optional[str] = Field(default=None, description="LLM server base URL")
     LLM_API_KEY: Optional[str] = Field(default=None, description="LLM API key")
     LLM_DEFAULT_MODEL: Optional[str] = Field(default=None, description="Default LLM model")

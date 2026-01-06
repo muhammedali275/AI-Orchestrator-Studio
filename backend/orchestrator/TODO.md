@@ -1,4 +1,4 @@
-# ZainOne Orchestrator Studio - Backend Implementation TODO
+# exampleOne Orchestrator Studio - Backend Implementation TODO
 
 ## Phase 1: Enhanced Configuration ✅
 - [x] Add structured config models (ExternalAgentConfig, ToolConfig, DataSourceConfig)

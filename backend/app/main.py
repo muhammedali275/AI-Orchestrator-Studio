@@ -7,7 +7,7 @@ import yaml
 import aiofiles
 from pathlib import Path
 
-app = FastAPI(title="ZainOne Orchestrator Studio API")
+app = FastAPI(title="exampleOne Orchestrator Studio API")
 
 # CORS middleware
 app.add_middleware(
@@ -680,7 +680,7 @@ async def get_admin_users():
             {
                 "id": "1",
                 "username": "admin",
-                "email": "admin@zainone.com",
+                "email": "admin@exampleone.com",
                 "role": "Administrator",
                 "status": "active",
                 "lastLogin": "2024-01-15 10:30:00",
@@ -688,7 +688,7 @@ async def get_admin_users():
             {
                 "id": "2",
                 "username": "developer",
-                "email": "dev@zainone.com",
+                "email": "dev@exampleone.com",
                 "role": "Developer",
                 "status": "active",
                 "lastLogin": "2024-01-15 09:15:00",
@@ -762,7 +762,7 @@ async def update_feature_flags(request: Dict[str, Any]):
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "service": "ZainOne Orchestrator Studio API"}
+    return {"status": "healthy", "service": "exampleOne Orchestrator Studio API"}
 
 if __name__ == "__main__":
     import uvicorn

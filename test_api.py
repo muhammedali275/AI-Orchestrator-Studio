@@ -34,7 +34,7 @@ def parse_args():
     )
     parser.add_argument(
         "--agent", 
-        default="zain_agent", 
+        default="example_agent", 
         help="Agent to use for the request"
     )
     parser.add_argument(

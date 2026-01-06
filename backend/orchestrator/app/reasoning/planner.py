@@ -179,7 +179,7 @@ class Planner:
                 id="task_2",
                 description="Analyze churn patterns",
                 action="external_agent",
-                parameters={"agent": "zain_agent", "task": "churn_analysis"},
+                parameters={"agent": "example_agent", "task": "churn_analysis"},
                 dependencies=["task_1"]
             ),
             Task(

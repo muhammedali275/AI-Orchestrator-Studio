@@ -14,8 +14,8 @@ import os
 # Configuration
 API_URL = "http://localhost:8000/api/chat"
 API_KEY = "test_api_key"  # Replace with actual API key if needed
-TOPOLOGY = "zain_default"
-AGENT_NAME = "zain_agent"
+TOPOLOGY = "example_default"
+AGENT_NAME = "example_agent"
 USER_ID = "test_user"
 TEST_INPUT = "What is the capital of France?"
 

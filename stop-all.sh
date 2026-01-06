@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "========================================"
-echo "Stopping ZainOne Orchestrator Studio"
+echo "Stopping exampleOne Orchestrator Studio"
 echo "========================================"
 echo ""
 

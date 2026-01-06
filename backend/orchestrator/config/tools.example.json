@@ -23,7 +23,7 @@
         "auth_token": "Bearer your_api_token",
         "timeout": 30,
         "headers": {
-          "User-Agent": "ZainOne-Orchestrator/1.0"
+          "User-Agent": "exampleOne-Orchestrator/1.0"
         }
       }
     },

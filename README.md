@@ -397,7 +397,7 @@ response = requests.post(
     headers={"Authorization": "Bearer YOUR_TOKEN"},
     json={
         "prompt": "What is the status of our top contracts?",
-        "agent": "zain_agent",
+        "agent": "example_agent",
         "user_id": "user123"
     }
 )
@@ -414,7 +414,7 @@ AIpanel can be configured through environment variables or a `.env` file:
 - `TLS_CERT_PATH`: Path to TLS certificate
 - `TLS_KEY_PATH`: Path to TLS key
 - `DB_CONNECTION_STRING`: Database connection string
-- `DEFAULT_AGENT_NAME`: Default agent name (default: zain_agent)
+- `DEFAULT_AGENT_NAME`: Default agent name (default: example_agent)
 - `LLM_BASE_URL`: LLM server base URL
 - `LLM_API_KEY`: LLM API key
 - `LLM_DEFAULT_MODEL`: Default LLM model

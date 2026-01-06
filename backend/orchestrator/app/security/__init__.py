@@ -1,5 +1,5 @@
 """
-Security package for ZainOne Orchestrator Studio.
+Security package for exampleOne Orchestrator Studio.
 
 Provides encryption, decryption, and credential management utilities.
 """

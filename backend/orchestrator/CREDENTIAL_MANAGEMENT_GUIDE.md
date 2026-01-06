@@ -2,7 +2,7 @@
 
 ## Overview
 
-The ZainOne Orchestrator Studio now includes a secure credential management system that allows storing and managing authentication credentials for all targets (LLMs, agents, databases, data sources, etc.) through the GUI.
+The exampleOne Orchestrator Studio now includes a secure credential management system that allows storing and managing authentication credentials for all targets (LLMs, agents, databases, data sources, etc.) through the GUI.
 
 ## Security Features
 

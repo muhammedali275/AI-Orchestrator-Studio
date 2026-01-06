@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "Starting ZainOne Orchestrator Studio Frontend..."
+echo "Starting exampleOne Orchestrator Studio Frontend..."
 
 # Inject app version into env from root package.json
 if [[ -f package.json ]]; then

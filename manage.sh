@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# ZainOne Orchestrator Studio Management Script
+# exampleOne Orchestrator Studio Management Script
 # This script provides a unified interface to manage the application
 
 # Display help information
 show_help() {
-    echo "ZainOne Orchestrator Studio Management Script"
+    echo "exampleOne Orchestrator Studio Management Script"
     echo ""
     echo "Usage: ./manage.sh [command]"
     echo ""
@@ -71,7 +71,7 @@ start_frontend() {
 # Start both servers
 start_all() {
     echo "========================================"
-    echo "Starting ZainOne Orchestrator Studio"
+    echo "Starting exampleOne Orchestrator Studio"
     echo "========================================"
     echo ""
     
@@ -96,7 +96,7 @@ start_all() {
 # Stop all servers
 stop_all() {
     echo "========================================"
-    echo "Stopping ZainOne Orchestrator Studio"
+    echo "Stopping exampleOne Orchestrator Studio"
     echo "========================================"
     echo ""
 
@@ -132,7 +132,7 @@ stop_all() {
 # Restart all servers
 restart_all() {
     echo "========================================"
-    echo "Restarting ZainOne Orchestrator Studio"
+    echo "Restarting exampleOne Orchestrator Studio"
     echo "========================================"
     echo ""
     
@@ -147,7 +147,7 @@ restart_all() {
 # Show status of all servers
 show_status() {
     echo "========================================"
-    echo "ZainOne Orchestrator Studio Status"
+    echo "exampleOne Orchestrator Studio Status"
     echo "========================================"
     echo ""
 

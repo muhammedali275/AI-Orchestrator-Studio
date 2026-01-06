@@ -33,7 +33,7 @@ INTENT_LABELS = {
 }
 
 
-ROUTER_SYSTEM_PROMPT = """You are an intent classification system for the ZainOne Orchestrator.
+ROUTER_SYSTEM_PROMPT = """You are an intent classification system for the exampleOne Orchestrator.
 
 Your task is to analyze user requests and classify them into one of the following intents:
 

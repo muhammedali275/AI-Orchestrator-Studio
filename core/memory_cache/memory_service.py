@@ -1065,7 +1065,7 @@ class MemoryService:
     async def _save_message_to_chroma(self, conversation_id: str, message: Message) -> bool:
         """Save message to Chroma."""
         try:
-            from langchain.schema import Document
+            from langchain_core.documents import Document
             
             # Create document
             doc = Document(
@@ -1091,7 +1091,7 @@ class MemoryService:
     async def _save_message_to_pinecone(self, conversation_id: str, message: Message) -> bool:
         """Save message to Pinecone."""
         try:
-            from langchain.schema import Document
+            from langchain_core.documents import Document
             
             # Create document
             doc = Document(

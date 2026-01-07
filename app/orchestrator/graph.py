@@ -9,9 +9,9 @@ import uuid
 from typing import Dict, Any, Optional, List, Tuple, Union, TypedDict, Annotated
 from datetime import datetime
 
-from langchain.schema.runnable import RunnableConfig
-from langchain.schema.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
-from langchain.schema.output_parser import StrOutputParser
+from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode

@@ -170,10 +170,7 @@ const LLMConnections: React.FC = () => {
       setMessage('Base URL is required');
       return;
     }
-    if (!formData.model.trim()) {
-      setMessage('Model name is required');
-      return;
-    }
+    // Model is optional - will be selected from available models later
 
     // Normalize base URL: strip trailing slashes and paths (e.g., remove /api/chat)
     const normalizeBaseUrl = (url: string) => {
@@ -207,7 +204,7 @@ const LLMConnections: React.FC = () => {
         id: connectionId,
         name: formData.name,
         base_url: normalizedBase,
-        model: formData.model,
+        model: formData.model || undefined, // Allow empty model - will be selected from available models
         api_key: formData.api_key || undefined,
         timeout: formData.timeout,
         max_tokens: formData.max_tokens,
@@ -498,23 +495,14 @@ const LLMConnections: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12}>
               <TextField
                 label="Connection Name"
                 fullWidth
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="local_ollama"
+                placeholder="Local Ollama"
                 helperText="A descriptive name for this connection"
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                label="Model Name"
-                fullWidth
-                value={formData.model}
-                onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                placeholder="gpt-oss:20b, llama3.1"
               />
             </Grid>
             <Grid item xs={12}>
@@ -531,7 +519,17 @@ const LLMConnections: React.FC = () => {
                   setFormData({ ...formData, base_url: url, is_local: isLocal });
                 }}
                 placeholder="http://localhost:11434"
-                helperText="Server URL only (e.g., http://10.99.70.200:11434) - do NOT include /api/chat or other paths"
+                helperText="Server URL only (e.g., http://localhost:11434) - do NOT include /api/chat or other paths"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Default Model (Optional)"
+                fullWidth
+                value={formData.model}
+                onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                placeholder="Leave empty to select from available models later"
+                helperText="You can specify a default model or leave empty - models will be auto-detected from the server"
               />
             </Grid>
             {formData.is_local ? (
@@ -609,7 +607,7 @@ const LLMConnections: React.FC = () => {
           <Button
             onClick={handleSaveConnection}
             variant="contained"
-            disabled={!formData.name || !formData.base_url || !formData.model || (!formData.is_local && !formData.api_key)}
+            disabled={!formData.name || !formData.base_url || (!formData.is_local && !formData.api_key)}
             sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
           >
             {editingConnection ? 'Update' : 'Create'}

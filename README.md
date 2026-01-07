@@ -152,7 +152,7 @@ Configure external LLM servers via GUI (`/llm-connections`) or JSON:
 {
   "id": "llm-1234567890",
   "name": "Production Ollama",
-  "base_url": "http://10.99.70.200:11434",
+  "base_url": "http://localhost:11434",
   "model": "qwen2.5-72b",
   "timeout": 120,
   "max_tokens": 4096

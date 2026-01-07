@@ -8,8 +8,8 @@ Supports LLM-based, rules-based, and semantic-layer planners.
 import logging
 from typing import Dict, Any, Optional, List, Callable, Union
 
-from langchain.prompts import ChatPromptTemplate
-from langchain.schema import SystemMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from ..config.config_service import ConfigService, PlannerConfig
 from ..llm.llm_registry import LLMRegistry

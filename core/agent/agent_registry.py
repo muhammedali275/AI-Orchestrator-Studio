@@ -11,9 +11,9 @@ from typing import Dict, Any, Optional, List, Union
 from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain.agents.format_scratchpad import format_to_openai_functions
 from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.schema import SystemMessage
-from langchain.schema.runnable import RunnablePassthrough
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import SystemMessage
+from langchain_core.runnables import RunnablePassthrough
 from langchain.memory import ConversationBufferMemory
 
 from ..config.config_service import ConfigService, AgentConfig

@@ -225,7 +225,7 @@ class TopologyEngine:
             config: Topology configuration
         """
         try:
-            from langchain.schema.runnable import RunnablePassthrough, RunnableSequence
+            from langchain_core.runnables import RunnablePassthrough, RunnableSequence
             
             # Create nodes
             nodes = {}

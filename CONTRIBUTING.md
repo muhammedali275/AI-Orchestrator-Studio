@@ -19,7 +19,7 @@ Thank you for your interest in contributing to AI Orchestrator Studio! We welcom
 
 1. **Fork the repository**
    ```bash
-   git clone https://github.com/yourusername/ai-orchestrator-studio.git
+   git clone https://github.com/muhammedali275/ai-orchestrator-studio.git
    cd ai-orchestrator-studio
    ```
 

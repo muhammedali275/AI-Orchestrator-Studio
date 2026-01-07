@@ -460,15 +460,10 @@ const ChatStudio: React.FC = () => {
     setError(null);
 
     try {
-      // Parse connection_id:model_id format
-      let connectionId = '';
-      let modelId = selectedModel;
-      
-      if (selectedModel.includes(':')) {
-        const parts = selectedModel.split(':');
-        connectionId = parts[0];
-        modelId = parts.slice(1).join(':'); // In case model ID has colons
-      }
+      // Find the selected model object to get connection_id and model_id
+      const modelObj = models.find(m => m.id === selectedModel);
+      const connectionId = modelObj?.connection_id || '';
+      const modelId = modelObj?.model_id || selectedModel;
       
       console.log('[ChatStudio] Sending message with:', { connectionId, modelId, routing: selectedProfile });
 

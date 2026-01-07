@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, List, Union
 
 from langchain.llms.base import LLM
 from langchain.chat_models.base import BaseChatModel
-from langchain.schema import BaseMessage
+from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI, OpenAI
 from langchain_community.llms import Ollama
 from langchain_community.chat_models import ChatOllama

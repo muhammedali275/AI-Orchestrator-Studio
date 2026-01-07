@@ -10,8 +10,8 @@ import hashlib
 from typing import Dict, Any, Optional, List, Tuple, Union
 
 from langchain.memory import ConversationBufferMemory, ChatMessageHistory
-from langchain.schema import BaseChatMessageHistory
-from langchain.schema.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from sqlalchemy.orm import Session
 
 from ..config import get_settings

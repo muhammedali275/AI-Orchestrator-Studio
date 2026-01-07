@@ -254,7 +254,7 @@ class ChatSession(Base):
     agent_id = Column(String(36), ForeignKey("agents.id"), nullable=True)
     
     # Session metadata
-    metadata = Column(JSON, nullable=True)
+    session_metadata = Column(JSON, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -296,7 +296,7 @@ class Message(Base):
     content = Column(Text, nullable=False)
     
     # Message metadata
-    metadata = Column(JSON, nullable=True)
+    message_metadata = Column(JSON, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

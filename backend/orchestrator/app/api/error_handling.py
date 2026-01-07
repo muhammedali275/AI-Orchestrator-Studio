@@ -131,7 +131,7 @@ def handle_llm_not_configured_error(request_id: Optional[str] = None) -> ErrorRe
         detail="No LLM_BASE_URL environment variable set",
         suggestions=[
             "Navigate to Settings > LLM Configuration",
-            "Enter your LLM server URL (e.g., http://10.99.70.200:4000)",
+            "Enter your LLM server URL (e.g., http://localhost:11434)",
             "Click 'Test & Save'",
             "Return to Chat Studio"
         ],

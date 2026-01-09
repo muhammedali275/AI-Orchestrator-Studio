@@ -10,8 +10,8 @@ import hashlib
 from typing import Dict, Any, Optional, List, Tuple, Union
 
 from langchain.memory import ConversationBufferMemory, ChatMessageHistory
-from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langchain.schema import BaseChatMessageHistory
+from langchain.schema.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -146,17 +146,17 @@ class DatabaseChatMessageHistory(BaseChatMessageHistory):
             if db_message.role == "user":
                 messages.append(HumanMessage(
                     content=db_message.content,
-                    additional_kwargs=db_message.metadata or {}
+                    additional_kwargs=db_message.message_metadata or {}
                 ))
             elif db_message.role == "assistant":
                 messages.append(AIMessage(
                     content=db_message.content,
-                    additional_kwargs=db_message.metadata or {}
+                    additional_kwargs=db_message.message_metadata or {}
                 ))
             elif db_message.role == "system":
                 messages.append(SystemMessage(
                     content=db_message.content,
-                    additional_kwargs=db_message.metadata or {}
+                    additional_kwargs=db_message.message_metadata or {}
                 ))
         
         return messages

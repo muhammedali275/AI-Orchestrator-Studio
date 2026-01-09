@@ -10,6 +10,15 @@ Thank you for your interest in contributing to AI Orchestrator Studio! We welcom
 - Include detailed steps to reproduce
 - Attach screenshots or error logs if applicable
 
+### We welcome contributors who can help with:
+
+Backend API design and implementation (Python / FastAPI)
+Orchestration logic and workflow execution
+LLM connector development and validation
+Datasource integration and testing
+Monitoring, metrics, and health-check systems
+Documentation, examples, and reference architectures
+
 ### Suggesting Features
 - Open an issue with the `enhancement` label
 - Clearly describe the feature and its use case
@@ -118,8 +127,8 @@ Contributors will be recognized in:
 ## ❓ Questions?
 
 - Open a [Discussion](../../discussions)
-- Join our community chat
-- Email: support@example.com
+- linkedin chat
+- Email: muhammedali275@gmail.com
 
 ---
 

@@ -86,7 +86,7 @@ async def update_llm_config(
             raw_url = raw_url.strip()
             parts = urlsplit(raw_url)
             if not parts.scheme or not parts.netloc:
-                raise HTTPException(status_code=400, detail="Base URL must include scheme and host, e.g., http://localhost:11434")
+                raise HTTPException(status_code=400, detail="Base URL must include scheme and host, e.g., http://10.99.70.200:4000")
             # Keep only scheme + host:port
             return urlunsplit((parts.scheme, parts.netloc, '', '', ''))
 
@@ -104,8 +104,7 @@ async def update_llm_config(
                         model_list = [{"id": m.get("name"), "name": m.get("name")} for m in models if m.get("name")]
                         if model_list:
                             return True, model_list, "ollama"
-                except Exception as e:
-                    logger.debug(f"Ollama probe failed for {base_url}/api/tags: {e}")
+                except Exception:
                     pass
                 # Try OpenAI-style /v1/models
                 try:
@@ -120,8 +119,7 @@ async def update_llm_config(
                                 model_list.append({"id": mid, "name": mid})
                         if model_list:
                             return True, model_list, "openai"
-                except Exception as e:
-                    logger.debug(f"OpenAI-style probe failed for {base_url}/v1/models: {e}")
+                except Exception:
                     pass
             return False, None, ""
 

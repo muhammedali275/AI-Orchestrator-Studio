@@ -15,6 +15,8 @@
 ---
 
 **AI Orchestrator Studio** provides a full-stack solution with an intuitive React frontend and a powerful FastAPI backend.
+                           Designed to be infrastructure-agnostic and suitable for both on-premises and cloud deployments.
+
 
 ---
 
@@ -39,7 +41,7 @@ Modern single-page application with 10+ functional pages:
 2. **Chat Studio** (`/chat-studio`) - Interactive chat interface with model selection and routing profiles
 3. **LLM Connections** (`/llm-connections`) - Manage external LLM server connections
 4. **Router Planner** (`/router-planner`) - Visual workflow designer and routing configuration
-5. **Data Sources** (`/datasources`) - Configure CubeJS and external data connections
+5. **Data Sources** (`/datasources`) - Configure external data connections
 6. **Tools Configuration** (`/tools`) - Manage available tools and their settings
 7. **Agents Configuration** (`/agents`) - Configure external AI agents
 8. **System Configuration** (`/system-config`) - Centralized system settings
@@ -102,6 +104,58 @@ cd AI-Orchestrator-Studio
 - API Docs: http://localhost:8000/docs
 
 ---
+Project Direction & Technical Goals
+
+AI Orchestrator Studio aims to evolve into a general-purpose, production-grade AI orchestration core that can operate consistently across on-premises and cloud environments, independent of any single AI provider or infrastructure stack.
+
+To achieve this, the project focuses on the following backend priorities:
+
+1. Core Orchestration Engine Enhancements
+
+We are strengthening the backend to serve as a reliable orchestration layer for any AI solution, including:
+
+Deterministic routing and execution flows
+LangGraph-style stateful workflow orchestration
+Clear separation between orchestration logic, tools, and infrastructure
+Provider-agnostic design for LLMs and external services
+
+2. API & Backend Development
+
+We are actively improving and extending backend APIs to support:
+
+Stable, well-versioned REST APIs
+Clear contracts between UI, orchestrator, tools, and agents
+Secure configuration and runtime control
+Extensibility for custom orchestration behaviors
+
+3. External LLM & Datasource Connectivity
+
+A key focus is making integrations robust, testable, and observable, including:
+
+Standardized connectors for LLM providers (local, hosted, custom)
+Connection testing and validation APIs
+Health checks for external datasources (DBs, APIs, services)
+Graceful error handling and retry strategies
+
+4. Monitoring & Observability
+
+We are enhancing visibility into both internal orchestration and external dependencies, including:
+
+Runtime status of connected LLMs
+External server and service health
+Latency, failure rates, and availability metrics
+Hooks for Prometheus / OpenTelemetry-style observability
+
+5. Developer Contributions We Are Looking For
+
+We welcome contributors who can help with:
+
+Backend API design and implementation (Python / FastAPI)
+Orchestration logic and workflow execution
+LLM connector development and validation
+Datasource integration and testing
+Monitoring, metrics, and health-check systems
+Documentation, examples, and reference architectures
 
 ## 📁 Project Structure
 
@@ -142,6 +196,13 @@ AI-Orchestrator-Studio/
 ```
 
 ---
+## Sponsors
+
+AI Orchestrator Studio is developed and maintained as an open-source project.
+
+Sponsorships help support ongoing development, documentation, testing, and long-term sustainability of the project.
+
+If this project is useful to you or your organization, consider supporting it via GitHub Sponsors.
 
 ## 🔧 Configuration
 
@@ -153,7 +214,7 @@ Configure external LLM servers via GUI (`/llm-connections`) or JSON:
   "id": "llm-1234567890",
   "name": "Production Ollama",
   "base_url": "http://localhost:11434",
-  "model": "qwen2.5-72b",
+  "model": "llama3",
   "timeout": 120,
   "max_tokens": 4096
 }
@@ -206,7 +267,7 @@ AI Orchestrator Studio
 │   └── Topology Management
 │
 ├── 📊 Data Sources (/datasources)
-│   ├── CubeJS Configuration
+│   
 │   ├── Custom API Endpoints
 │   └── Database Connections
 │

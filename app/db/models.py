@@ -253,8 +253,8 @@ class ChatSession(Base):
     # Agent reference
     agent_id = Column(String(36), ForeignKey("agents.id"), nullable=True)
     
-    # Session metadata
-    session_metadata = Column(JSON, nullable=True)
+    # Session metadata (renamed from 'metadata' to avoid SQLAlchemy reserved word)
+    session_metadata = Column("metadata", JSON, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -271,7 +271,7 @@ class ChatSession(Base):
             "title": self.title,
             "user_id": self.user_id,
             "agent_id": self.agent_id,
-            "metadata": self.metadata,
+            "metadata": self.session_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "message_count": len(self.messages) if self.messages else 0
@@ -295,8 +295,8 @@ class Message(Base):
     role = Column(String(50), nullable=False)  # user, assistant, system, tool
     content = Column(Text, nullable=False)
     
-    # Message metadata
-    message_metadata = Column(JSON, nullable=True)
+    # Message metadata (renamed from 'metadata' to avoid SQLAlchemy reserved word)
+    message_metadata = Column("metadata", JSON, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -311,7 +311,7 @@ class Message(Base):
             "chat_session_id": self.chat_session_id,
             "role": self.role,
             "content": self.content,
-            "metadata": self.metadata,
+            "metadata": self.message_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
 

@@ -143,8 +143,7 @@ async def send_message(
         # Get or create conversation
         if request.conversation_id:
             conversation = db.query(Conversation).filter(
-                Conversation.id == request.conversation_id,
-                Conversation.is_deleted == False
+                Conversation.id == request.conversation_id
             ).first()
             if not conversation:
                 logger.error(f"[Chat UI] Conversation not found: {request.conversation_id}")
@@ -265,6 +264,9 @@ async def send_message_stream(
         Streaming response
     """
     try:
+        # Debug logging
+        logger.info(f"[Chat UI] Received stream request - model_id: {request.model_id}, connection_id: {request.connection_id}")
+        
         # Validate routing profile
         if not validate_routing_profile(request.routing_profile):
             logger.warning(f"[Chat UI] Invalid routing profile in stream: {request.routing_profile}")
@@ -282,8 +284,7 @@ async def send_message_stream(
         
         if request.conversation_id:
             conversation = db.query(Conversation).filter(
-                Conversation.id == request.conversation_id,
-                Conversation.is_deleted == False
+                Conversation.id == request.conversation_id
             ).first()
             if not conversation:
                 logger.error(f"[Chat UI] Conversation not found in stream: {request.conversation_id}")
@@ -323,6 +324,7 @@ async def send_message_stream(
         router_service = ChatRouter(settings)
         
         async def generate():
+            full_response = ""
             try:
                 # Standardize model ID before streaming
                 standardized_model_id = None
@@ -346,7 +348,18 @@ async def send_message_stream(
                     # Normalize chunk to string
                     token = chunk if isinstance(chunk, str) else chunk.get("token") or chunk.get("data") or ""
                     if token:
+                        full_response += token
                         yield f"data: {token}\n\n"
+                
+                # Save assistant message to database
+                assistant_message = Message(
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=full_response,
+                    metadata={"model": standardized_model_id}
+                )
+                db.add(assistant_message)
+                db.commit()
                 
                 # Final event to signal completion
                 yield "event: done\n"
@@ -381,7 +394,7 @@ async def list_conversations(
         List of conversations
     """
     try:
-        query = db.query(Conversation).filter(Conversation.is_deleted == False)
+        query = db.query(Conversation)
         
         if user_id:
             query = query.filter(Conversation.user_id == user_id)
@@ -427,17 +440,14 @@ async def get_conversation(
     """
     try:
         conversation = db.query(Conversation).filter(
-            Conversation.id == conversation_id,
-            Conversation.is_deleted == False
+            Conversation.id == conversation_id
         ).first()
-        
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
         
-        # Filter messages to exclude soft-deleted ones
+        # Get messages for conversation
         messages = db.query(Message).filter(
-            Message.conversation_id == conversation_id,
-            Message.is_deleted == False
+            Message.conversation_id == conversation_id
         ).order_by(Message.created_at.asc()).all()
         
         return {

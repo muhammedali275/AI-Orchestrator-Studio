@@ -45,14 +45,19 @@ class ChatRouter:
         """Get specific connection by ID from llm_connections."""
         try:
             conns = getattr(self.settings, 'llm_connections', {}) or {}
+            logger.info(f"[Chat Router] Looking for connection_id: {connection_id}, available connections: {list(conns.keys())}")
             if connection_id in conns:
                 cfg = conns[connection_id]
-                return {"base_url": getattr(cfg, 'base_url', ''), "api_key": getattr(cfg, 'api_key', None)}
-        except Exception:
-            pass
+                result = {"base_url": getattr(cfg, 'base_url', ''), "api_key": getattr(cfg, 'api_key', None)}
+                logger.info(f"[Chat Router] Found connection: {result}")
+                return result
+        except Exception as e:
+            logger.error(f"[Chat Router] Error getting connection: {e}")
         # Fallback to default
         if getattr(self.settings, 'llm_base_url', None):
-            return {"base_url": self.settings.llm_base_url, "api_key": getattr(self.settings, 'llm_api_key', None)}
+            fallback = {"base_url": self.settings.llm_base_url, "api_key": getattr(self.settings, 'llm_api_key', None)}
+            logger.warning(f"[Chat Router] Using fallback connection: {fallback}")
+            return fallback
         return {"base_url": "http://localhost:11434", "api_key": None}
     
     def _select_connection_for_model(self, model_id: Optional[str]) -> Dict[str, Any]:

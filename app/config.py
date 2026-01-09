@@ -7,8 +7,8 @@ No hard-coded credentials or connection strings.
 
 import os
 from typing import Optional, List, Dict, Any
-from pydantic_settings import BaseSettings
 from pydantic import Field, validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):

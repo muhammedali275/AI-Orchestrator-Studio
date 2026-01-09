@@ -5,6 +5,7 @@ Uses Settings for configuration - no hard-coded endpoints.
 Supports authentication for both cloud and on-premise LLM servers.
 """
 
+import json
 import logging
 import time
 from typing import List, Dict, Any, Optional, Tuple
@@ -73,7 +74,7 @@ class LLMClient:
     
     def _detect_provider(self) -> LLMProvider:
         """
-        Detect LLM provider from base URL.
+        Detect LLM provider from base URL and API key presence.
         
         Returns:
             LLMProvider enum value
@@ -94,16 +95,30 @@ class LLMClient:
             return LLMProvider.HUGGINGFACE
         
         # On-premise / Local providers
-        elif "11434" in url_lower or "ollama" in url_lower:
+        # Check Ollama first (specific port and keyword)
+        if "11434" in url_lower or "ollama" in url_lower:
             return LLMProvider.OLLAMA
-        elif "vllm" in url_lower or ":8000" in url_lower:
+        
+        # HTTPS indicates external API server (vLLM/OpenAI-compatible)
+        if url_lower.startswith("https://"):
             return LLMProvider.VLLM
-        elif "text-generation-webui" in url_lower or ":5000" in url_lower or ":7860" in url_lower:
+        
+        # If API key is present, likely vLLM/OpenAI-compatible (not Ollama)
+        if self.api_key:
+            return LLMProvider.VLLM
+            
+        # vLLM typically uses port 8000 and OpenAI-compatible endpoints
+        # Check for :8000 port OR if URL contains /v1 (OpenAI-compatible indicator)
+        if ":8000" in url_lower or "/v1" in url_lower:
+            return LLMProvider.VLLM
+        
+        if "text-generation-webui" in url_lower or ":5000" in url_lower or ":7860" in url_lower:
             return LLMProvider.TEXTGEN_WEBUI
-        elif "llama.cpp" in url_lower or "llamacpp" in url_lower or ":8080" in url_lower:
+        if "llama.cpp" in url_lower or "llamacpp" in url_lower or ":8080" in url_lower:
             return LLMProvider.LLAMACPP
         
-        return LLMProvider.CUSTOM
+        # Default to VLLM for unknown OpenAI-compatible servers
+        return LLMProvider.VLLM
     
     def _detect_auth_type(self) -> AuthType:
         """
@@ -322,30 +337,69 @@ class LLMClient:
                 payload.update(kwargs)
                 
                 # Determine the correct endpoint based on the base URL
-                # Ollama uses /api/chat for chat completions (supports messages format)
+                # Ollama 0.13.x uses /api/generate with prompt (not messages)
                 # OpenAI-compatible uses /chat/completions or /v1/chat/completions
                 if self._is_ollama_endpoint():
-                    # Ollama endpoint - use /api/chat which supports messages
-                    endpoint = f"{self.base_url}/api/chat"
+                    # Ollama endpoint - use /api/generate (Ollama 0.13.x compatible)
+                    endpoint = f"{self.base_url}/api/generate"
+                    logger.info(f"[LLM Client] Ollama detected - calling endpoint: {endpoint}")
+                    
+                    # Convert messages to prompt for Ollama /api/generate
+                    prompt_parts = []
+                    for msg in messages:
+                        role = msg.get("role", "user")
+                        content = msg.get("content", "")
+                        if role == "system":
+                            prompt_parts.append(f"System: {content}")
+                        elif role == "user":
+                            prompt_parts.append(f"User: {content}")
+                        elif role == "assistant":
+                            prompt_parts.append(f"Assistant: {content}")
+                    prompt_parts.append("Assistant:")
+                    prompt = "\n".join(prompt_parts)
+                    
                     payload = {
                         "model": model,
-                        "messages": messages,  # Ollama /api/chat supports messages format
-                        "temperature": temperature,
+                        "prompt": prompt,
                         "stream": False
                     }
+                    if temperature is not None:
+                        if "options" not in payload:
+                            payload["options"] = {}
+                        payload["options"]["temperature"] = temperature
                     if max_tokens:
-                        payload["options"] = {"num_predict": max_tokens}
+                        if "options" not in payload:
+                            payload["options"] = {}
+                        payload["options"]["num_predict"] = max_tokens
                 else:
-                    # OpenAI-compatible endpoint
-                    endpoint = f"{self.base_url}/chat/completions"
+                    # OpenAI-compatible endpoint (vLLM, OpenAI, etc.)
+                    # Use /v1/chat/completions if base URL doesn't already include /v1
+                    if "/v1" in self.base_url:
+                        endpoint = f"{self.base_url}/chat/completions"
+                    else:
+                        endpoint = f"{self.base_url}/v1/chat/completions"
                 
                 response = await self.client.post(
                     endpoint,
                     json=payload
                 )
                 
+                logger.info(f"[LLM Client] Request sent to: {endpoint}, Status: {response.status_code}")
+                logger.info(f"[LLM Client] Response headers: {dict(response.headers)}")
+                
                 response.raise_for_status()
                 result = response.json()
+                
+                # Extract response based on endpoint type
+                if self._is_ollama_endpoint():
+                    # Ollama /api/generate returns {"response": "text", "model": "...", "done": true}
+                    response_text = result.get("response", "")
+                    return {
+                        "response": {"choices": [{"message": {"content": response_text}}]},
+                        "model_used": model,
+                        "attempts": attempt + 1,
+                        "success": True
+                    }
                 
                 logger.info(f"[LLM] Success with model {model}")
                 
@@ -423,7 +477,9 @@ class LLMClient:
             "/api/chat" in self.base_url,
             ":11434" in self.base_url
         ]
-        return any(ollama_indicators)
+        is_ollama = any(ollama_indicators)
+        logger.info(f"[LLM Client] Checking if Ollama endpoint - base_url: {self.base_url}, is_ollama: {is_ollama}")
+        return is_ollama
     
     def _is_retryable_error(self, error_msg: str, status_code: int) -> bool:
         """Determine if an error is retryable."""
@@ -523,19 +579,43 @@ class LLMClient:
         
         # Determine the correct endpoint for streaming
         if self._is_ollama_endpoint():
-            # Ollama streaming - use /api/chat with stream=true
-            endpoint = f"{self.base_url}/api/chat"
+            # Ollama streaming - use /api/generate with stream=true (Ollama 0.13.x)
+            endpoint = f"{self.base_url}/api/generate"
+            
+            # Convert messages to prompt for Ollama /api/generate
+            prompt_parts = []
+            for msg in messages:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if role == "system":
+                    prompt_parts.append(f"System: {content}")
+                elif role == "user":
+                    prompt_parts.append(f"User: {content}")
+                elif role == "assistant":
+                    prompt_parts.append(f"Assistant: {content}")
+            prompt_parts.append("Assistant:")
+            prompt = "\n".join(prompt_parts)
+            
             payload = {
                 "model": model,
-                "messages": messages,  # Ollama /api/chat supports messages
-                "temperature": temperature,
+                "prompt": prompt,
                 "stream": True
             }
+            if temperature is not None:
+                if "options" not in payload:
+                    payload["options"] = {}
+                payload["options"]["temperature"] = temperature
             if max_tokens:
-                payload["options"] = {"num_predict": max_tokens}
+                if "options" not in payload:
+                    payload["options"] = {}
+                payload["options"]["num_predict"] = max_tokens
         else:
-            # OpenAI-compatible streaming
-            endpoint = f"{self.base_url}/chat/completions"
+            # OpenAI-compatible streaming (vLLM, OpenAI, etc.)
+            # Use /v1/chat/completions if base URL doesn't already include /v1
+            if "/v1" in self.base_url:
+                endpoint = f"{self.base_url}/chat/completions"
+            else:
+                endpoint = f"{self.base_url}/v1/chat/completions"
         
         async with self.client.stream(
             "POST",
@@ -543,9 +623,24 @@ class LLMClient:
             json=payload
         ) as response:
             response.raise_for_status()
-            async for chunk in response.aiter_text():
-                if chunk.strip():
-                    yield chunk
+            
+            if self._is_ollama_endpoint():
+                # Ollama /api/generate streaming returns JSON lines with "response": "token"
+                async for line in response.aiter_lines():
+                    if line.strip():
+                        try:
+                            data = json.loads(line)
+                            # Ollama /api/generate format: {"response": "token", "done": false}
+                            token = data.get("response", "")
+                            if token:
+                                yield token
+                        except json.JSONDecodeError:
+                            continue
+            else:
+                # OpenAI-compatible streaming
+                async for chunk in response.aiter_text():
+                    if chunk.strip():
+                        yield chunk
     
     async def close(self):
         """Close the HTTP client."""

@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any, Optional, List, Union
 
 from sqlalchemy.orm import Session
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 from ..config import get_settings
 from ..db.models import Agent
